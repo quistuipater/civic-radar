@@ -84,6 +84,25 @@ saved to `/archive` first.
   linked through `Meeting.agenda_document_id` (now populated at ingestion
   time — previously dead columns). No heuristic fallback; waits for a later
   run if Ollama's unavailable.
+- **Meeting-results extraction**: `app/ai/meeting_results.py` summarizes what
+  *actually happened* at a meeting from its `minutes` document — overall
+  summary, per-topic outcomes (approved/denied/continued/withdrawn, vote
+  tally if stated), notable public comment, continued/tabled items — via a
+  dedicated `meeting_results_summary` prompt distinct from the generic
+  `document_summary` one (which is framed entirely around *proposed*
+  decisions — "key_decision_requested", "what_changes_from_current_policy" —
+  the wrong shape for a document reporting a decision already made).
+  Deliberately does **not** try to match each decision back to a specific
+  `agenda_items` row: item numbering/formatting drift too much between an
+  agenda and its minutes to do that reliably without a real trial run first
+  (same lesson as the 72/80 false-positive rate that killed auto-linking in
+  `app/issue_matching.py`) — stores one meeting-level summary per minutes
+  document instead, surfaced via the existing generic ai_outputs display on
+  the document detail page (no new UI needed). No heuristic fallback, same
+  reasoning as agenda-item extraction. Runs from `run_ai_pipeline` alongside
+  agenda-item extraction; existing already-classified minutes documents
+  needed `scripts/backfill_meeting_results.py` since the worker's AI batch
+  only queries documents *without* a classification yet.
 - **Semantic search**: `document_chunks.embedding` (pgvector) is populated
   automatically as documents are parsed; `/api/search` returns pgvector
   cosine-similarity matches (`semantic_matches`) alongside keyword results.
@@ -165,7 +184,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 475 tests / ~99% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 483 tests / ~99% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)

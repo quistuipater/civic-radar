@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.ai.agenda_items import extract_agenda_items
 from app.ai.classify import classify_document
 from app.ai.embed import embed_document_chunks
+from app.ai.meeting_results import extract_meeting_results
 from app.ai.summarize import summarize_document
 from app.models import AiOutput, Document
 
@@ -23,6 +24,7 @@ def run_ai_pipeline(db: Session, document: Document) -> None:
 
     embed_document_chunks(db, document)
     extract_agenda_items(db, document)
+    extract_meeting_results(db, document)
 
     already_classified = (
         db.query(AiOutput)

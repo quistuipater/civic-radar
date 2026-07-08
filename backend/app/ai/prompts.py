@@ -70,6 +70,39 @@ Respond with ONLY a JSON object matching this exact shape:
 }}
 """
 
+MEETING_RESULTS_PROMPT = """You are summarizing what actually happened at a government meeting, from its
+minutes, for Ventura Civic Radar. This is about *outcomes* (what was decided), not what was proposed --
+do not restate the agenda. Distinguish source facts from inference; never invent a vote tally, name, or
+outcome that isn't stated in the text. Be conservative: never assert corruption, illegality, or bad faith
+unless the text explicitly says so. If a field isn't stated, use null rather than guessing.
+
+Jurisdiction: {jurisdiction}
+Agency/body: {agency}
+Meeting date: {meeting_date}
+
+Minutes text:
+---
+{text}
+---
+
+Respond with ONLY a JSON object matching this exact shape:
+{{
+  "overall_summary": "plain-English account of what happened at this meeting, 2-4 sentences",
+  "key_decisions": [
+    {{
+      "topic": "what the decision was about",
+      "outcome": "approved|denied|continued|withdrawn|no_action|other",
+      "vote_tally": "e.g. '4-1' or null if not stated",
+      "notes": "brief context -- dissent, conditions attached, notable discussion"
+    }}
+  ],
+  "notable_public_comment": "themes raised in public comment, or null if none/not recorded",
+  "continued_or_tabled_items": "items pushed to a future meeting, or null if none",
+  "source_confidence": "low|medium|high"
+}}
+If nothing decision-worthy happened (e.g. a cancelled meeting), respond with key_decisions: [].
+"""
+
 AGENDA_ITEM_EXTRACTION_PROMPT = """You are splitting a government meeting agenda into its individual agenda items
 for Ventura Civic Radar. Skip non-substantive entries (call to order, roll call, pledge, adjournment,
 public comment period headers). Be conservative: never assert corruption, illegality, or bad faith. If a
@@ -165,6 +198,24 @@ PROMPT_DEFAULTS = [
                     "vote_expected": "bool",
                 }
             ]
+        },
+        active=True,
+    ),
+    dict(
+        prompt_key="meeting_results_summary",
+        prompt_version="v1",
+        task_type="meeting_results_summary",
+        prompt_text=MEETING_RESULTS_PROMPT,
+        model_name=None,
+        model_params={"temperature": 0.2},
+        json_schema={
+            "overall_summary": "str",
+            "key_decisions": [
+                {"topic": "str", "outcome": "str", "vote_tally": "str", "notes": "str"}
+            ],
+            "notable_public_comment": "str",
+            "continued_or_tabled_items": "str",
+            "source_confidence": "str",
         },
         active=True,
     ),

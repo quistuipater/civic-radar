@@ -9,6 +9,7 @@ MODEL_BY_TASK_TYPE = {
     "classification": settings.ollama_triage_model,
     "summarization": settings.ollama_analysis_model,
     "agenda_item_extraction": settings.ollama_triage_model,
+    "meeting_results_summary": settings.ollama_analysis_model,
 }
 
 
