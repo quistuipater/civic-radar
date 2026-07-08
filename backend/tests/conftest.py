@@ -43,36 +43,52 @@ def test_engine():
 
 
 @pytest.fixture
-def db(test_engine):
-    # Application code under test calls db.commit()/db.rollback() for real
-    # (ingest_source, ingest_crime_source, create_alert_from_classification,
-    # ...). Binding a plain Session to an already-`.begin()`-started
-    # Connection does NOT protect against that: session.commit() ends the
-    # outer transaction for real, so a bare `transaction.rollback()` in
-    # teardown silently becomes a no-op after the first commit (SQLAlchemy
-    # emits "transaction already deassociated from connection") and rows
-    # leak into civic_radar_test permanently instead of being isolated.
-    # join_transaction_mode="create_savepoint" makes the session use a
-    # SAVEPOINT for its own begin/commit/rollback cycle instead, restarting
-    # a fresh savepoint after each inner commit, so the *outer* transaction
-    # (and this fixture's rollback of it) stays intact regardless of how
-    # many times the code under test calls commit().
+def db_connection(test_engine):
     connection = test_engine.connect()
     transaction = connection.begin()
-    session_factory = sessionmaker(
-        bind=connection,
+    try:
+        yield connection
+    finally:
+        transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def db_session_factory(db_connection):
+    # Application code under test calls db.commit()/db.rollback() for real
+    # (ingest_source, ingest_crime_source, create_alert_from_classification,
+    # worker.py's run_*() functions each doing SessionLocal(), ...). Binding a
+    # plain Session to an already-`.begin()`-started Connection does NOT
+    # protect against that: session.commit() ends the outer transaction for
+    # real, so a bare `transaction.rollback()` in teardown silently becomes a
+    # no-op after the first commit (SQLAlchemy emits "transaction already
+    # deassociated from connection") and rows leak into civic_radar_test
+    # permanently instead of being isolated. join_transaction_mode=
+    # "create_savepoint" makes each session use a SAVEPOINT for its own
+    # begin/commit/rollback cycle instead, restarting a fresh savepoint after
+    # each inner commit, so the *outer* transaction (and this fixture's
+    # rollback of it) stays intact regardless of how many times -- or how
+    # many separate Session objects -- the code under test commits through.
+    # Exposed as a factory (not just one `db` session) so worker.py tests can
+    # monkeypatch SessionLocal to it: worker.py calls SessionLocal() fresh
+    # per function rather than taking a `db` param, so it needs its own
+    # sessions that still share this same isolated connection/transaction.
+    return sessionmaker(
+        bind=db_connection,
         autoflush=False,
         autocommit=False,
         future=True,
         join_transaction_mode="create_savepoint",
     )
-    session = session_factory()
+
+
+@pytest.fixture
+def db(db_session_factory):
+    session = db_session_factory()
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 @pytest.fixture

@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 310 tests / ~89% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 331 tests / ~93% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -303,8 +303,13 @@ session uses `join_transaction_mode="create_savepoint"` (see
 `create_alert_from_classification`, ...); without it, an inner commit ends
 the fixture's own outer transaction, silently breaking isolation (caught
 live 2026-07-08 via an `ObjectDeletedError` on a test that called the same
-commit-triggering function twice). As of 2026-07-08:
-89% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
+commit-triggering function twice). `db_session_factory` (also in
+`tests/conftest.py`) exposes that same sessionmaker directly, for the rare
+case where code under test opens its own sessions rather than taking a `db`
+param (`worker.py`'s `run_*()` functions each call `SessionLocal()` fresh) —
+monkeypatch `SessionLocal` to it and every session it creates still shares
+the one isolated connection/transaction. As of 2026-07-08:
+93% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
 scoring/heuristic classification (100%), the full REST router layer
 (97-100%, `tests/test_router_*.py`), issue matching (94%, `test_issue_matching.py`
 — exact-identifier auto-link priority/idempotency and the fuzzy-suggestion
@@ -334,7 +339,20 @@ OOM crash on a 6,102-page packet), not whether pdfplumber itself works, and
 a real fixture couldn't practically exercise the OCR-cap or many-thousand-
 page cases anyway. The wall-clock-timeout test monkeypatches
 `PARSE_TIMEOUT_SECONDS` down to 1s to exercise the real `signal.alarm`-based
-mechanism without an actual 120s wait. Not yet covered: the worker loop.
+mechanism without an actual 120s wait. `worker.py` (99%, `test_worker.py`)
+rounds this out: `is_due()`'s interval/boundary logic, the ingestion-tick
+enabled/due filtering and crime-vs-document routing, batch-size limits on
+the parsing/AI batches, per-item crash isolation in all three batches (one
+bad document/source must not stop the rest), the alert-creation gate
+(`create_alert_from_classification` only fires when the classification
+actually produced `output_json`), and `main()`'s loop-survives-a-crashing-
+tick behavior (tested by monkeypatching `time.sleep` to raise a sentinel
+exception, escaping the otherwise-infinite `while True` deterministically
+after exactly one iteration). Nothing is left uncovered project-wide except
+a handful of pre-existing partial gaps not on the original punch list
+(`dashboard.py` 50%, `export/markdown.py` 64%, `export/digest.py` 79%,
+`routers/crime_incidents.py` 69%, thin wrappers like `db.py`/`http_client.py`)
+— none of which have had a live bug, unlike everything above.
 
 ### Re-running database setup
 
