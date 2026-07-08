@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 134 tests / ~62% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 207 tests / ~74% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -217,19 +217,40 @@ pipeline yet — listed here so the investigation doesn't need repeating.
   (may just re-link content already covered by other sources) before
   building the ingestion side.
 - **Public health surveillance (CDC NWSS, WastewaterSCAN, CDC NSSP, CDC
-  FluView/RSV-NET)** — investigated 2026-07-08 and ruled out, not just
-  "not yet built": none currently has Ventura-County-specific data. CDC
-  NWSS has no Ventura reporting jurisdiction at all (checked the actual
-  jurisdiction list in the public dataset). CDC NSSP and FluView/RSV-NET
-  are state-level only by design (confirmed via each dataset's schema — no
-  county/sub-state field exists to filter on). WastewaterSCAN monitors 90
-  sites nationwide (30 in California) via a plain public CSV
+  FluView/RSV-NET)** — investigated 2026-07-08. CDC NSSP and FluView/RSV-NET
+  remain ruled out: state-level only by design (confirmed via each dataset's
+  schema — no county/sub-state field exists to filter on). WastewaterSCAN
+  monitors 90 sites nationwide (30 in California) via a plain public CSV
   (`data.wastewaterscan.org/data/plant-points.csv`, found via browser
   network inspection of their tracker page, no API key needed) but none are
-  in Ventura County (nearest: LA County/Carson, Lompoc, Ontario). Revisit
-  WastewaterSCAN specifically on/near the 1st of each month in case they add
-  a local site (tracked as a standing memory note, not automated — the
-  other three are structural and won't change).
+  in Ventura County (nearest: LA County/Carson, Lompoc, Ontario), and as of
+  2026-07-08 they've confirmed directly (email) that they aren't onboarding
+  new sites at all. Revisit specifically on/near the 1st of each month in
+  case that changes (standing memory note, not automated).
+
+  **Correction, found 2026-07-08 via CDPH's own dashboard rather than the
+  public NWSS jurisdiction API/dataset**: Ventura County is *not* fully dark.
+  CDPH's Cal-SuWers dashboard (`skylab.cdph.ca.gov/calwws`) lists an active
+  sewershed, **"Ventura (Oxnard)"** — samples through 2026-06-30, tracking
+  SARS-CoV-2, Influenza A, Influenza B, and RSV. Its `Data Source` field
+  reads **"CDC NWSS Commercial Contract (Verily)"**, a reporting pathway
+  distinct from the standard state/local-health-department-submitted NWSS
+  sites (which is why checking NWSS's own public jurisdiction list, as
+  originally done, missed it — that list apparently doesn't include
+  Verily-commercial-contract sites). Two caveats before wiring this in:
+  (1) the site covers **Oxnard's** treatment plant, not the City of
+  Ventura's own Water Reclamation Facility, so it's county-adjacent
+  coverage, not literally Ventura-city-level; (2) the dashboard is an R
+  Shiny app (`#shiny-tab-download` route) with a per-sample data table
+  (Region, County, County (City/Utility), Sample Date, PCR Gene Target,
+  Raw Concentration, Norm PMMoV, rolling averages, Data Source — filterable
+  by "County (City/Utility)" = `Ventura (Oxnard)`) and a **"Download Data"**
+  button, not a plain public CSV/API endpoint like WastewaterSCAN's — the
+  button is a Shiny `downloadHandler` tied to a stateful session, so a
+  connector would need browser automation (e.g. Playwright driving the
+  filter + click) rather than a simple HTTP GET. Not yet built; worth
+  prioritizing over the three ruled-out sources above since the data
+  actually exists for the county now.
 
 ## Running it
 
@@ -283,10 +304,20 @@ session uses `join_transaction_mode="create_savepoint"` (see
 the fixture's own outer transaction, silently breaking isolation (caught
 live 2026-07-08 via an `ObjectDeletedError` on a test that called the same
 commit-triggering function twice). As of 2026-07-08:
-62% overall coverage, concentrated on the areas that have had real live bugs
-(document-ingestion dedup + connector health tracking, crime-data validation
-logic, connector parsing). Not yet covered: the AI pipeline (needs live
-Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop.
+74% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
+scoring/heuristic classification (100%), and the full REST router layer
+(97-100%, `tests/test_router_*.py`) — the router tests lean on the fact that
+`classify_document`/`summarize_document` already degrade deterministically
+with no Prompt rows seeded (heuristic fallback / 422 respectively) and
+`match_document_to_issue`/`suggest_issues_for_document` are pure DB logic, so
+none of that needed mocking; `search.py`'s semantic path does call
+`ollama_client.embed()` with no such gate, so that one *is* explicitly
+monkeypatched for determinism rather than depending on whatever
+`OLLAMA_BASE_URL` happens to resolve to. Not yet covered: the AI
+orchestration layer proper (`ai/pipeline.py`, `ai/agenda_items.py`, `ai/embed.py`
+— needs live/mocked Ollama), OCR/parsing (needs real PDF fixtures), the
+worker loop, and `issue_matching.py`'s fuzzy-suggestion path (34%, the exact
+identifier auto-link is covered via the router tests).
 
 ### Re-running database setup
 

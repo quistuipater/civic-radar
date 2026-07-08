@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
-from app.models import AiOutput, Document, Source
+from app.models import AgendaItem, AiOutput, Alert, Document, Issue, ManualSubmission, Meeting, Source
 
 TEST_DATABASE_URL = settings.database_url.rsplit("/", 1)[0] + "/civic_radar_test"
 
@@ -147,6 +147,79 @@ def make_ai_output(db, input_ref_id, **overrides) -> AiOutput:
     db.add(output)
     db.flush()
     return output
+
+
+def make_alert(db, document: Document | None = None, **overrides) -> Alert:
+    if document is None and "issue_id" not in overrides:
+        document = make_document(db)
+    defaults = dict(
+        document_id=document.id if document else None,
+        alert_level=3,
+        title="Test Alert",
+        trigger_reason="test trigger",
+        reviewed=False,
+        status="new",
+    )
+    defaults.update(overrides)
+    alert = Alert(**defaults)
+    db.add(alert)
+    db.flush()
+    return alert
+
+
+def make_issue(db, **overrides) -> Issue:
+    defaults = dict(
+        title="Test Issue",
+        slug=f"test-issue-{uuid.uuid4().hex[:8]}",
+        status="new",
+    )
+    defaults.update(overrides)
+    issue = Issue(**defaults)
+    db.add(issue)
+    db.flush()
+    return issue
+
+
+def make_meeting(db, **overrides) -> Meeting:
+    defaults = dict(
+        jurisdiction="City of Ventura",
+        agency="City Clerk",
+        body="City Council",
+        start_time=utcnow(),
+        status="scheduled",
+    )
+    defaults.update(overrides)
+    meeting = Meeting(**defaults)
+    db.add(meeting)
+    db.flush()
+    return meeting
+
+
+def make_agenda_item(db, meeting: Meeting | None = None, **overrides) -> AgendaItem:
+    if meeting is None:
+        meeting = make_meeting(db)
+    defaults = dict(
+        meeting_id=meeting.id,
+        title="Test Agenda Item",
+    )
+    defaults.update(overrides)
+    item = AgendaItem(**defaults)
+    db.add(item)
+    db.flush()
+    return item
+
+
+def make_manual_submission(db, **overrides) -> ManualSubmission:
+    defaults = dict(
+        submission_type="text",
+        content_text="Someone said something on Nextdoor",
+        claimed_source="Nextdoor",
+    )
+    defaults.update(overrides)
+    submission = ManualSubmission(**defaults)
+    db.add(submission)
+    db.flush()
+    return submission
 
 
 def utcnow() -> datetime:
