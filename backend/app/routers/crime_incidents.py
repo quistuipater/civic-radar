@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -51,7 +51,7 @@ def list_crime_incidents(
 def get_crime_incident(incident_id: uuid.UUID, db: Session = Depends(get_db)):
     incident = db.get(CrimeIncident, incident_id)
     if not incident:
-        return {"error": "not found"}
+        raise HTTPException(status_code=404, detail="crime incident not found")
     return {
         "id": incident.id,
         "agency": incident.agency,

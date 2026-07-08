@@ -204,6 +204,7 @@ class ManualSubmissionOut(ORMModel):
     verified: bool
     verification_status: str
     related_issue_id: uuid.UUID | None
+    operator_note: str | None
     submitted_at: datetime
 
 

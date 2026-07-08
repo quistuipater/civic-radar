@@ -60,9 +60,6 @@ class TestUpdateManualSubmission:
         assert body["verified"] is False
 
     def test_updates_operator_note_independently_of_verification_status(self, db, client):
-        # Note: ManualSubmissionOut doesn't include operator_note, so it's
-        # verified via the DB rather than the response body -- the endpoint
-        # accepts and persists it, but never echoes it back to the caller.
         submission = make_manual_submission(db)
         db.commit()
 
@@ -71,8 +68,7 @@ class TestUpdateManualSubmission:
         )
 
         assert resp.status_code == 200
-        db.refresh(submission)
-        assert submission.operator_note == "checked against city notice"
+        assert resp.json()["operator_note"] == "checked against city notice"
 
     def test_returns_404_for_unknown_id(self, client):
         resp = client.patch(

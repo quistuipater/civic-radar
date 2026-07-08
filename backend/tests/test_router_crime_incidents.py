@@ -1,10 +1,4 @@
-"""Router tests for /api/crime-incidents. Note: get_crime_incident returns
-a 200 with {"error": "not found"} for a missing ID rather than a real 404
-(unlike every other router in this codebase, which raises HTTPException) --
-tested here as the actual current behavior, not a judgment on whether it's
-right; see the accompanying flag to the user about fixing it for
-consistency.
-"""
+"""Router tests for /api/crime-incidents."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -114,10 +108,6 @@ class TestGetCrimeIncident:
 
         assert resp.json()["raw_attributes"] == {"GlobalID": "abc"}
 
-    def test_unknown_id_returns_200_with_error_body_not_a_404(self, client):
-        # Documents current behavior -- flagged separately as inconsistent
-        # with every other router (which raises a real 404).
+    def test_returns_404_for_unknown_id(self, client):
         resp = client.get("/api/crime-incidents/00000000-0000-0000-0000-000000000000")
-
-        assert resp.status_code == 200
-        assert resp.json() == {"error": "not found"}
+        assert resp.status_code == 404

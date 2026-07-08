@@ -365,12 +365,12 @@ are either genuinely unreachable given FK constraints (`IssueLink.issue_id`
 can't dangle — same reasoning as `issue_matching.py`'s gaps) or the
 `if __name__ == "__main__":` guard in `worker.py`.
 
-Two real inconsistencies surfaced while writing these tests, not yet
-fixed (flagged, not silently changed): `GET /api/crime-incidents/{id}`
-returns a 200 with `{"error": "not found"}` for a missing ID rather than
-a real 404, unlike every other router; and `PATCH /api/manual-submissions/{id}`
-accepts and persists `operator_note`, but `ManualSubmissionOut` doesn't
-include that field, so it's never echoed back in the response.
+Two real inconsistencies surfaced while writing these tests, both since
+fixed: `GET /api/crime-incidents/{id}` used to return a 200 with
+`{"error": "not found"}` for a missing ID instead of a real 404 (now
+raises `HTTPException(404)` like every other router); and `PATCH
+/api/manual-submissions/{id}` accepted and persisted `operator_note` but
+`ManualSubmissionOut` never included it in the response (now does).
 
 ### Re-running database setup
 
