@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 80 tests / ~59% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 134 tests / ~62% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -275,8 +275,15 @@ database — created automatically on first run, on the same `postgres`
 container as dev — not sqlite, since several models depend on Postgres-only
 features (pgvector's `Vector`/`cosine_distance`, JSONB). Each test runs
 inside a transaction that's rolled back afterward for isolation, so the
-schema only needs to be created once per test session. As of 2026-07-08:
-59% overall coverage, concentrated on the areas that have had real live bugs
+schema only needs to be created once per test session. The `db` fixture's
+session uses `join_transaction_mode="create_savepoint"` (see
+`tests/conftest.py`) — required because application code under test calls
+`db.commit()`/`db.rollback()` for real (`ingest_source`, `ingest_crime_source`,
+`create_alert_from_classification`, ...); without it, an inner commit ends
+the fixture's own outer transaction, silently breaking isolation (caught
+live 2026-07-08 via an `ObjectDeletedError` on a test that called the same
+commit-triggering function twice). As of 2026-07-08:
+62% overall coverage, concentrated on the areas that have had real live bugs
 (document-ingestion dedup + connector health tracking, crime-data validation
 logic, connector parsing). Not yet covered: the AI pipeline (needs live
 Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop.

@@ -6,6 +6,7 @@ a transaction that's rolled back afterward, so tests never see each other's
 data and the schema only needs to be created once per test session.
 """
 
+import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -16,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
-from app.models import Source
+from app.models import AiOutput, Document, Source
 
 TEST_DATABASE_URL = settings.database_url.rsplit("/", 1)[0] + "/civic_radar_test"
 
@@ -43,9 +44,28 @@ def test_engine():
 
 @pytest.fixture
 def db(test_engine):
+    # Application code under test calls db.commit()/db.rollback() for real
+    # (ingest_source, ingest_crime_source, create_alert_from_classification,
+    # ...). Binding a plain Session to an already-`.begin()`-started
+    # Connection does NOT protect against that: session.commit() ends the
+    # outer transaction for real, so a bare `transaction.rollback()` in
+    # teardown silently becomes a no-op after the first commit (SQLAlchemy
+    # emits "transaction already deassociated from connection") and rows
+    # leak into civic_radar_test permanently instead of being isolated.
+    # join_transaction_mode="create_savepoint" makes the session use a
+    # SAVEPOINT for its own begin/commit/rollback cycle instead, restarting
+    # a fresh savepoint after each inner commit, so the *outer* transaction
+    # (and this fixture's rollback of it) stays intact regardless of how
+    # many times the code under test calls commit().
     connection = test_engine.connect()
     transaction = connection.begin()
-    session_factory = sessionmaker(bind=connection, autoflush=False, autocommit=False, future=True)
+    session_factory = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
     session = session_factory()
     try:
         yield session
@@ -91,6 +111,42 @@ def make_source(db, **overrides) -> Source:
     db.add(source)
     db.flush()
     return source
+
+
+def make_document(db, source: Source | None = None, **overrides) -> Document:
+    if source is None:
+        source = make_source(db)
+    defaults = dict(
+        source_id=source.id,
+        title="Test Document",
+        document_type="agenda",
+        archive_path="/archive/test/doc.pdf",
+        content_hash=uuid.uuid4().hex,
+        agency=source.agency,
+        body=source.body,
+    )
+    defaults.update(overrides)
+    document = Document(**defaults)
+    db.add(document)
+    db.flush()
+    return document
+
+
+def make_ai_output(db, input_ref_id, **overrides) -> AiOutput:
+    defaults = dict(
+        task_type="document_classification",
+        model_name="test-model",
+        prompt_version="v1",
+        input_ref_type="document",
+        input_ref_id=input_ref_id,
+        output_json={},
+        confidence="high",
+    )
+    defaults.update(overrides)
+    output = AiOutput(**defaults)
+    db.add(output)
+    db.flush()
+    return output
 
 
 def utcnow() -> datetime:
