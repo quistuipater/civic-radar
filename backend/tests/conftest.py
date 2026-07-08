@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
-from app.models import AgendaItem, AiOutput, Alert, Document, Issue, ManualSubmission, Meeting, Source
+from app.models import AgendaItem, AiOutput, Alert, Document, Issue, ManualSubmission, Meeting, Prompt, Source
 
 TEST_DATABASE_URL = settings.database_url.rsplit("/", 1)[0] + "/civic_radar_test"
 
@@ -220,6 +220,22 @@ def make_manual_submission(db, **overrides) -> ManualSubmission:
     db.add(submission)
     db.flush()
     return submission
+
+
+def make_prompt(db, **overrides) -> Prompt:
+    defaults = dict(
+        prompt_key="test_prompt",
+        prompt_version="v1",
+        task_type="test_task",
+        prompt_text="{text}",
+        model_name="test-model",
+        active=True,
+    )
+    defaults.update(overrides)
+    prompt = Prompt(**defaults)
+    db.add(prompt)
+    db.flush()
+    return prompt
 
 
 def utcnow() -> datetime:
