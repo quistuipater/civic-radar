@@ -9,3 +9,6 @@ archive/
 .remember/
 node_modules/
 .claude/
+.coverage
+.pytest_cache/
+htmlcov/

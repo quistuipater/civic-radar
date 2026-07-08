@@ -16,3 +16,5 @@ lxml==5.3.0
 tenacity==9.0.0
 python-dateutil==2.9.0.post0
 markdown-it-py==3.0.0
+pytest==8.3.3
+pytest-cov==5.0.0

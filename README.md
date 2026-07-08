@@ -146,6 +146,8 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
+- **Test suite**: pytest, 41 tests / ~55% coverage as of 2026-07-08, see
+  "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
 
@@ -255,6 +257,20 @@ pulled. Without Ollama running, classification still works via the heuristic
 fallback (everything it produces is marked `confidence: low` and
 `human_review_required: true`, so it always lands in the review queue rather
 than being trusted outright).
+
+### Running tests
+
+`docker compose run --rm api pytest` (add `--cov=app --cov-report=term-missing`
+for a coverage report). Tests run against a real `civic_radar_test` Postgres
+database — created automatically on first run, on the same `postgres`
+container as dev — not sqlite, since several models depend on Postgres-only
+features (pgvector's `Vector`/`cosine_distance`, JSONB). Each test runs
+inside a transaction that's rolled back afterward for isolation, so the
+schema only needs to be created once per test session. As of 2026-07-08:
+55% overall coverage, concentrated on the areas that have had real live bugs
+(document-ingestion dedup + connector health tracking, crime-data validation
+logic, connector parsing). Not yet covered: the AI pipeline (needs live
+Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop.
 
 ### Re-running database setup
 
