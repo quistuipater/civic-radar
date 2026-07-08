@@ -1,8 +1,9 @@
 """Turn archived HTML/PDF files into searchable text and chunks (prd.md 9.4).
 
 PDF text is extracted page by page so we can keep document-to-page mapping.
-Structured fields (ordinance/resolution/project numbers, APNs) are pulled with
-regexes — a first-pass heuristic, not a substitute for the AI extraction layer.
+Structured fields (ordinance/resolution/project numbers, APNs, hearing dates/
+comment deadlines) are pulled with regexes — a first-pass heuristic, not a
+substitute for the AI extraction layer.
 """
 
 import logging
@@ -13,6 +14,7 @@ from pathlib import Path
 import pdfplumber
 import pytesseract
 from bs4 import BeautifulSoup
+from dateutil import parser as dateutil_parser
 from pdf2image import convert_from_path
 
 logger = logging.getLogger(__name__)
@@ -144,6 +146,27 @@ RESOLUTION_RE = re.compile(r"Resolution\s+No\.?\s*([A-Z0-9\-]{2,20})", re.IGNORE
 PROJECT_RE = re.compile(r"(?:Project|Case)\s*(?:No\.?|#)\s*([A-Z]{0,6}-?\d{2,6}-?\d{0,6})", re.IGNORECASE)
 APN_RE = re.compile(r"APN[:\s#]*([\d]{3}-?[\d]{1,3}-?[\d]{1,3})", re.IGNORECASE)
 
+# A first-pass heuristic, same caveat as the identifier regexes above: real
+# civic-notice phrasing for hearing dates/comment deadlines varies a lot more
+# than a project number ever does, so this catches common phrasings rather
+# than every one -- documents where it misses just keep comment_deadline/
+# public_hearing_date at None, same as if nothing here existed yet.
+DATE_PATTERN = r"[A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}"
+PUBLIC_HEARING_RE = re.compile(
+    rf"(?:public\s+)?hearing\s+(?:will\s+be\s+held|is\s+scheduled(?:\s+for)?|will\s+take\s+place)\s*(?:on\s+)?({DATE_PATTERN})",
+    re.IGNORECASE,
+)
+COMMENT_DEADLINE_RE = re.compile(
+    rf"comments?[^.\n]{{0,80}}?(?:must\s+be\s+received\s+by|no\s+later\s+than|due\s+by|deadline\s+is|accepted\s+until|will\s+be\s+accepted\s+until)\s+({DATE_PATTERN})",
+    re.IGNORECASE,
+)
+# Same idea, reversed word order ("deadline ... for comments ... is <date>"
+# rather than "comments ... by <date>") -- civic notices use both.
+COMMENT_DEADLINE_RE_ALT = re.compile(
+    rf"deadline[^.\n]{{0,40}}?comments?[^.\n]{{0,20}}?(?:is|of|falls\s+on)\s+({DATE_PATTERN})",
+    re.IGNORECASE,
+)
+
 
 def extract_structured_fields(text: str) -> dict:
     fields = {}
@@ -156,4 +179,23 @@ def extract_structured_fields(text: str) -> dict:
         match = pattern.search(text)
         if match:
             fields[key] = match.group(1).strip()
+
+    for key, patterns in (
+        ("public_hearing_date", (PUBLIC_HEARING_RE,)),
+        ("comment_deadline", (COMMENT_DEADLINE_RE, COMMENT_DEADLINE_RE_ALT)),
+    ):
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                parsed_date = _parse_date_fuzzy(match.group(1))
+                if parsed_date:
+                    fields[key] = parsed_date
+                    break
     return fields
+
+
+def _parse_date_fuzzy(date_str: str):
+    try:
+        return dateutil_parser.parse(date_str).date()
+    except (ValueError, OverflowError):
+        return None

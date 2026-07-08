@@ -57,6 +57,20 @@ class TestParseDocument:
 
         assert document.project_number == "PL2026-0001-ALREADY-SET"
 
+    def test_public_hearing_date_and_comment_deadline_are_populated_from_real_text(self, db, tmp_path):
+        path = tmp_path / "notice.txt"
+        path.write_text(
+            "A public hearing will be held on June 15, 2026 at 6:00 PM. "
+            "Written comments must be received by June 10, 2026 to be considered."
+        )
+        document = make_document(db, archive_path=str(path), public_hearing_date=None, comment_deadline=None)
+        db.commit()
+
+        service_module.parse_document(db, document)
+
+        assert document.public_hearing_date.isoformat() == "2026-06-15"
+        assert document.comment_deadline.isoformat() == "2026-06-10"
+
     def test_reparsing_replaces_old_chunks_rather_than_appending(self, db, tmp_path):
         path = tmp_path / "notice.txt"
         path.write_text("short text")

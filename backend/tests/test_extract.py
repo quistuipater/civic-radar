@@ -10,6 +10,7 @@ PDF fixture couldn't exercise the OCR-cap or many-thousands-of-pages cases at
 all practically.
 """
 
+from datetime import date
 from pathlib import Path
 
 import app.parsing.extract as extract_module
@@ -262,3 +263,44 @@ class TestExtractStructuredFields:
         fields = extract_structured_fields("Ordinance No. 2026-05 relates to Case No. PL2026-0042.")
         assert fields["ordinance_number"] == "2026-05"
         assert fields["project_number"] == "PL2026-0042"
+
+    def test_extracts_public_hearing_date_will_be_held_phrasing(self):
+        fields = extract_structured_fields("A public hearing will be held on June 15, 2026 at 6:00 PM.")
+        assert fields["public_hearing_date"] == date(2026, 6, 15)
+
+    def test_extracts_public_hearing_date_is_scheduled_for_phrasing(self):
+        fields = extract_structured_fields("The hearing is scheduled for July 1, 2026.")
+        assert fields["public_hearing_date"] == date(2026, 7, 1)
+
+    def test_extracts_public_hearing_date_in_numeric_format(self):
+        fields = extract_structured_fields("Notice: hearing will take place on 6/15/2026.")
+        assert fields["public_hearing_date"] == date(2026, 6, 15)
+
+    def test_extracts_comment_deadline_must_be_received_by_phrasing(self):
+        fields = extract_structured_fields("Written comments must be received by June 20, 2026 to be considered.")
+        assert fields["comment_deadline"] == date(2026, 6, 20)
+
+    def test_extracts_comment_deadline_accepted_until_phrasing(self):
+        fields = extract_structured_fields("Comments on this matter will be accepted until July 5, 2026.")
+        assert fields["comment_deadline"] == date(2026, 7, 5)
+
+    def test_extracts_comment_deadline_with_reversed_word_order(self):
+        # "deadline ... for comments ... is <date>" rather than
+        # "comments ... by <date>" -- both phrasings appear in real notices.
+        fields = extract_structured_fields("The deadline for comments is 7/10/2026.")
+        assert fields["comment_deadline"] == date(2026, 7, 10)
+
+    def test_no_date_phrasing_present_leaves_deadline_fields_absent(self):
+        fields = extract_structured_fields("This document has no dates mentioned in it at all.")
+        assert "public_hearing_date" not in fields
+        assert "comment_deadline" not in fields
+
+    def test_hearing_mention_without_a_date_does_not_produce_a_false_match(self):
+        fields = extract_structured_fields("A public hearing on this topic was held last month.")
+        assert "public_hearing_date" not in fields
+
+    def test_invalid_calendar_date_is_rejected_gracefully_not_crashed_on(self):
+        # Matches the DATE_PATTERN regex shape but isn't a real date --
+        # dateutil raises, which must be caught rather than propagate.
+        fields = extract_structured_fields("A public hearing will be held on February 30, 2026.")
+        assert "public_hearing_date" not in fields
