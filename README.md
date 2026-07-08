@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 226 tests / ~76% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 262 tests / ~83% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -304,20 +304,28 @@ session uses `join_transaction_mode="create_savepoint"` (see
 the fixture's own outer transaction, silently breaking isolation (caught
 live 2026-07-08 via an `ObjectDeletedError` on a test that called the same
 commit-triggering function twice). As of 2026-07-08:
-74% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
-scoring/heuristic classification (100%), and the full REST router layer
-(97-100%, `tests/test_router_*.py`) — the router tests lean on the fact that
-`classify_document`/`summarize_document` already degrade deterministically
-with no Prompt rows seeded (heuristic fallback / 422 respectively) and
-`match_document_to_issue`/`suggest_issues_for_document` are pure DB logic, so
-none of that needed mocking; `search.py`'s semantic path does call
-`ollama_client.embed()` with no such gate, so that one *is* explicitly
-monkeypatched for determinism rather than depending on whatever
-`OLLAMA_BASE_URL` happens to resolve to. Not yet covered: the AI
-orchestration layer proper (`ai/pipeline.py`, `ai/agenda_items.py`, `ai/embed.py`
-— needs live/mocked Ollama), OCR/parsing (needs real PDF fixtures), the
-worker loop, and `issue_matching.py`'s fuzzy-suggestion path (34%, the exact
-identifier auto-link is covered via the router tests).
+83% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
+scoring/heuristic classification (100%), the full REST router layer
+(97-100%, `tests/test_router_*.py`), issue matching (94%, `test_issue_matching.py`
+— exact-identifier auto-link priority/idempotency and the fuzzy-suggestion
+ranking/dedup/exclusion logic), and OCR/parsing (`extract.py`/`service.py`,
+100%, `test_extract.py`/`test_parsing_service.py`). The router tests lean on
+the fact that `classify_document`/`summarize_document` already degrade
+deterministically with no Prompt rows seeded (heuristic fallback / 422
+respectively) and `match_document_to_issue`/`suggest_issues_for_document`
+are pure DB logic, so none of that needed mocking; `search.py`'s semantic
+path does call `ollama_client.embed()` with no such gate, so that one *is*
+explicitly monkeypatched for determinism rather than depending on whatever
+`OLLAMA_BASE_URL` happens to resolve to. The PDF-parsing tests mock
+`pdfplumber` entirely rather than using real PDF fixtures — the actual thing
+worth protecting is our own OCR-fallback/OCR-cap/`page.close()` logic (the
+exact fix for a live OOM crash on a 6,102-page packet), not whether
+pdfplumber itself works, and a real fixture couldn't practically exercise
+the OCR-cap or many-thousand-page cases anyway. The wall-clock-timeout test
+monkeypatches `PARSE_TIMEOUT_SECONDS` down to 1s to exercise the real
+`signal.alarm`-based mechanism without an actual 120s wait. Not yet covered:
+the AI orchestration layer proper (`ai/pipeline.py`, `ai/agenda_items.py`,
+`ai/embed.py` — needs live/mocked Ollama) and the worker loop.
 
 ### Re-running database setup
 
