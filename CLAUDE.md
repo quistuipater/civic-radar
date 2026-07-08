@@ -10,7 +10,7 @@ Common commands:
 - `docker compose up -d postgres && docker compose run --rm api python scripts/init_db.py` — create schema
 - `docker compose run --rm api python scripts/seed_sources.py && docker compose run --rm api python scripts/seed_prompts.py` — seed source registry + versioned prompts (both idempotent)
 - `docker compose up -d api worker` — dashboard at `http://localhost:8010`, API docs at `/docs`
-- `backend/tests/` (pytest, ~74% coverage as of 2026-07-08): `docker compose run --rm api pytest`. Runs against a real `civic_radar_test` Postgres database (not sqlite — several models need pgvector/JSONB), each test isolated in a rolled-back transaction. Covers document-ingestion dedup/health-tracking, crime-data validation logic, connector parsing, and dashboard smoke tests. Not yet covered: the AI pipeline (needs live Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop — verify those manually (live ingestion runs, curl against the API) until they're covered too.
+- `backend/tests/` (pytest, ~76% coverage as of 2026-07-08): `docker compose run --rm api pytest`. Runs against a real `civic_radar_test` Postgres database (not sqlite — several models need pgvector/JSONB), each test isolated in a rolled-back transaction. Covers document-ingestion dedup/health-tracking, crime-data validation logic, connector parsing, and dashboard smoke tests. Not yet covered: the AI pipeline (needs live Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop — verify those manually (live ingestion runs, curl against the API) until they're covered too.
 
 Follow the existing stack and module layout in `backend/app/` rather than introducing a different framework or reorganizing — it mirrors the PRD's architecture directly (see below).
 

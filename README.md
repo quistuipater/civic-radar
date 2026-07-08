@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 207 tests / ~74% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 226 tests / ~76% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
