@@ -169,6 +169,57 @@ class TestBuildDailyDigestApproachingDeadlines:
         digest = build_daily_digest(db)
         assert digest["approaching_deadlines"] == []
 
+    def test_includes_public_hearing_date_within_14_days(self, db):
+        make_document(db, public_hearing_date=days_from_today(5))
+        db.commit()
+        digest = build_daily_digest(db)
+        assert len(digest["approaching_deadlines"]) == 1
+
+    def test_excludes_public_hearing_date_beyond_14_days(self, db):
+        make_document(db, public_hearing_date=days_from_today(30))
+        db.commit()
+        digest = build_daily_digest(db)
+        assert digest["approaching_deadlines"] == []
+
+    def test_document_with_only_comment_deadline_is_labeled_comment_deadline(self, db):
+        make_document(db, comment_deadline=days_from_today(5), public_hearing_date=None)
+        db.commit()
+        digest = build_daily_digest(db)
+        _, deadline_date, kind = digest["approaching_deadlines"][0]
+        assert kind == "comment deadline"
+        assert deadline_date == days_from_today(5)
+
+    def test_document_with_only_public_hearing_date_is_labeled_hearing(self, db):
+        make_document(db, comment_deadline=None, public_hearing_date=days_from_today(5))
+        db.commit()
+        digest = build_daily_digest(db)
+        _, deadline_date, kind = digest["approaching_deadlines"][0]
+        assert kind == "hearing"
+
+    def test_document_with_both_fields_in_window_surfaces_the_sooner_one(self, db):
+        make_document(db, comment_deadline=days_from_today(10), public_hearing_date=days_from_today(3))
+        db.commit()
+        digest = build_daily_digest(db)
+        _, deadline_date, kind = digest["approaching_deadlines"][0]
+        assert deadline_date == days_from_today(3)
+        assert kind == "hearing"
+
+    def test_document_with_comment_deadline_in_window_and_hearing_date_far_outside_only_uses_the_in_window_one(self, db):
+        make_document(db, comment_deadline=days_from_today(5), public_hearing_date=days_from_today(60))
+        db.commit()
+        digest = build_daily_digest(db)
+        _, deadline_date, kind = digest["approaching_deadlines"][0]
+        assert kind == "comment deadline"
+        assert deadline_date == days_from_today(5)
+
+    def test_results_are_sorted_soonest_first_across_documents(self, db):
+        make_document(db, title="Later", comment_deadline=days_from_today(10))
+        make_document(db, title="Sooner", public_hearing_date=days_from_today(2))
+        db.commit()
+        digest = build_daily_digest(db)
+        titles = [doc.title for doc, _, _ in digest["approaching_deadlines"]]
+        assert titles == ["Sooner", "Later"]
+
 
 class TestBuildDailyDigestLowConfidenceAndUnverified:
     def test_includes_recent_low_confidence_classifications(self, db):
@@ -205,9 +256,8 @@ class TestRenderDigestMarkdown:
 
         assert "No level 3+ alerts in this window" in markdown
         assert "None scheduled in the next 14 days" in markdown
-        assert markdown.count("None in this window") >= 2
+        assert markdown.count("None in this window") >= 3
         assert "None flagged in this window" in markdown
-        assert "structured deadline extraction is limited" in markdown
 
     def test_top_change_uses_trigger_reason_when_present(self, db):
         make_alert(db, alert_level=4, trigger_reason="hearing expected", summary="fallback summary")
@@ -261,11 +311,17 @@ class TestRenderDigestMarkdown:
         markdown = render_digest_markdown(build_daily_digest(db))
         assert f"[Flagged Document](/documents/{document.id})" in markdown
 
-    def test_approaching_deadline_renders_with_the_deadline_date(self, db):
-        document = make_document(db, title="Comment Period Item", comment_deadline=days_from_today(5))
+    def test_approaching_deadline_renders_with_the_deadline_date_and_kind(self, db):
+        make_document(db, title="Comment Period Item", comment_deadline=days_from_today(5))
         db.commit()
         markdown = render_digest_markdown(build_daily_digest(db))
-        assert f"{days_from_today(5).isoformat()}: [Comment Period Item]" in markdown
+        assert f"{days_from_today(5).isoformat()} (comment deadline): [Comment Period Item]" in markdown
+
+    def test_approaching_hearing_date_renders_with_hearing_label(self, db):
+        make_document(db, title="Zoning Hearing Item", public_hearing_date=days_from_today(5))
+        db.commit()
+        markdown = render_digest_markdown(build_daily_digest(db))
+        assert f"{days_from_today(5).isoformat()} (hearing): [Zoning Hearing Item]" in markdown
 
     def test_low_confidence_and_unverified_can_coexist(self, db):
         document = make_document(db, title="Shaky Classification")

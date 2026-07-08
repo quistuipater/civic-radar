@@ -12,6 +12,7 @@ is ever auto-published (prd.md 9.9.4 acceptance criteria #3).
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import AgendaItem, AiOutput, Alert, Document, ManualSubmission, Meeting
@@ -77,17 +78,27 @@ def build_daily_digest(db: Session, window_hours: int = DEFAULT_WINDOW_HOURS) ->
         .all()
     )
 
-    approaching_deadlines = (
+    deadline_window_docs = (
         db.query(Document)
         .filter(
-            Document.comment_deadline.isnot(None),
-            Document.comment_deadline <= deadline_until,
-            Document.comment_deadline >= now.date(),
+            or_(
+                Document.comment_deadline.between(now.date(), deadline_until),
+                Document.public_hearing_date.between(now.date(), deadline_until),
+            )
         )
-        .order_by(Document.comment_deadline.asc())
-        .limit(SECTION_LIMIT)
         .all()
     )
+    # A document can have both fields set -- surface whichever is sooner,
+    # labeled so a reader knows if it's a submission cutoff or a hearing to
+    # attend, and only actually consider dates that fall in the window
+    # (between() on the other field may have matched on the other column).
+    approaching_deadlines = sorted(
+        (
+            (doc, *_soonest_deadline(doc, now.date(), deadline_until))
+            for doc in deadline_window_docs
+        ),
+        key=lambda row: row[1],
+    )[:SECTION_LIMIT]
 
     low_confidence = (
         db.query(AiOutput, Document)
@@ -120,6 +131,20 @@ def build_daily_digest(db: Session, window_hours: int = DEFAULT_WINDOW_HOURS) ->
         "low_confidence": low_confidence,
         "unverified_submissions": unverified_submissions,
     }
+
+
+def _soonest_deadline(doc: Document, window_start, window_end) -> tuple:
+    """Returns (date, kind_label) for whichever of comment_deadline/
+    public_hearing_date is sooner, considering only the one(s) that actually
+    fall in [window_start, window_end] (a document can have one field in
+    the window and the other far outside it).
+    """
+    candidates = []
+    if doc.comment_deadline and window_start <= doc.comment_deadline <= window_end:
+        candidates.append((doc.comment_deadline, "comment deadline"))
+    if doc.public_hearing_date and window_start <= doc.public_hearing_date <= window_end:
+        candidates.append((doc.public_hearing_date, "hearing"))
+    return min(candidates, key=lambda c: c[0])
 
 
 def render_digest_markdown(digest: dict) -> str:
@@ -183,10 +208,10 @@ def render_digest_markdown(digest: dict) -> str:
     lines.append("## Items With Approaching Deadlines")
     lines.append("")
     if digest["approaching_deadlines"]:
-        for doc in digest["approaching_deadlines"]:
-            lines.append(f"- {doc.comment_deadline.isoformat()}: [{doc.title or '(untitled)'}](/documents/{doc.id})")
+        for doc, deadline_date, kind in digest["approaching_deadlines"]:
+            lines.append(f"- {deadline_date.isoformat()} ({kind}): [{doc.title or '(untitled)'}](/documents/{doc.id})")
     else:
-        lines.append("_None recorded (structured deadline extraction is limited today — see README known gaps)._")
+        lines.append("_None in this window._")
     lines.append("")
 
     lines.append("## Low-Confidence or Unverified Claims")

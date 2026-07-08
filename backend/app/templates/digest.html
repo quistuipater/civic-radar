@@ -80,12 +80,12 @@
 <h2>Items With Approaching Deadlines</h2>
 {% if digest.approaching_deadlines %}
 <ul>
-{% for doc in digest.approaching_deadlines %}
-  <li>{{ doc.comment_deadline }}: <a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% for doc, deadline_date, kind in digest.approaching_deadlines %}
+  <li>{{ deadline_date }} ({{ kind }}): <a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
 {% endfor %}
 </ul>
 {% else %}
-<p class="empty">None recorded (structured deadline extraction is limited today — see README known gaps).</p>
+<p class="empty">None in this window.</p>
 {% endif %}
 
 <h2>Low-Confidence or Unverified Claims</h2>

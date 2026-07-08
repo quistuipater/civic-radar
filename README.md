@@ -106,17 +106,19 @@ saved to `/archive` first.
   unverified claims. Pure rollup of already-generated AI outputs (no new model
   calls per digest run); internal/draft only, dashboard-only (not emailed —
   `prd.md` 25's open question #6 resolved that way since there's no email
-  infra in this project). "Approaching deadlines" surfaces `comment_deadline`
-  within the next 14 days — populated by `extract_structured_fields()`
-  (`app/parsing/extract.py`) alongside the existing ordinance/resolution/
-  project-number regexes, via a first-pass heuristic over common civic-notice
-  phrasings ("comments must be received by...", "hearing will be held
-  on...", both word orders) rather than a full NLP date extractor. Backfilled
-  against the existing corpus via `scripts/backfill_deadline_extraction.py`
-  (2026-07-08: 3 of 313 already-parsed documents matched — real notices are
-  simply thin on explicit "by this date" language so far, not a sign the
-  regex is broken; new documents get it automatically at parse time going
-  forward).
+  infra in this project). "Approaching deadlines" surfaces both
+  `comment_deadline` and `public_hearing_date` within the next 14 days —
+  populated by `extract_structured_fields()` (`app/parsing/extract.py`)
+  alongside the existing ordinance/resolution/project-number regexes, via a
+  first-pass heuristic over common civic-notice phrasings ("comments must be
+  received by...", "hearing will be held on...", both word orders) rather
+  than a full NLP date extractor. Backfilled against the existing corpus via
+  `scripts/backfill_deadline_extraction.py` (2026-07-08: 3 of 313 already-
+  parsed documents matched — real notices are simply thin on explicit "by
+  this date" language so far, not a sign the regex is broken; new documents
+  get it automatically at parse time going forward). A document with both
+  fields set in-window surfaces whichever is sooner, labeled `(comment
+  deadline)` or `(hearing)` so a reader knows which kind of date it is.
 - **Crime incident data**: `app/ingestion/crime_data.py` +
   `app/ingestion/arcgis_feature_service.py` sync two agencies' public,
   unauthenticated ArcGIS FeatureServers into a dedicated `crime_incidents`
@@ -163,7 +165,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 467 tests / ~99% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 475 tests / ~99% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
