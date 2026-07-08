@@ -165,6 +165,36 @@ def issue_brief_redirect(issue_id: uuid.UUID):
     return RedirectResponse(url=f"/api/issues/{issue_id}/brief.md")
 
 
+def _meeting_source_context(db: Session, meeting: Meeting | None) -> dict:
+    """The specific agenda/packet/minutes documents a Meeting points to (as
+    opposed to the broader date+body document match, which can't tell which
+    row *is* the agenda vs. the minutes), plus the meeting-results summary
+    for the minutes doc if one's been extracted. Deliberately meeting-level,
+    not per-agenda-item -- see app/ai/meeting_results.py for why matching a
+    specific decision back to a specific agenda item isn't attempted.
+    """
+    if meeting is None:
+        return {"key_documents": {}, "meeting_results": None}
+    key_documents = {
+        "agenda": db.get(Document, meeting.agenda_document_id) if meeting.agenda_document_id else None,
+        "packet": db.get(Document, meeting.packet_document_id) if meeting.packet_document_id else None,
+        "minutes": db.get(Document, meeting.minutes_document_id) if meeting.minutes_document_id else None,
+    }
+    meeting_results = None
+    if meeting.minutes_document_id:
+        meeting_results = (
+            db.query(AiOutput)
+            .filter(
+                AiOutput.input_ref_type == "document",
+                AiOutput.input_ref_id == meeting.minutes_document_id,
+                AiOutput.task_type == "meeting_results_summary",
+            )
+            .order_by(AiOutput.created_at.desc())
+            .first()
+        )
+    return {"key_documents": key_documents, "meeting_results": meeting_results}
+
+
 @router.get("/meetings/{meeting_id}")
 def meeting_detail_page(meeting_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     meeting = db.get(Meeting, meeting_id)
@@ -179,7 +209,13 @@ def meeting_detail_page(meeting_id: uuid.UUID, request: Request, db: Session = D
     agenda_items = db.query(AgendaItem).filter(AgendaItem.meeting_id == meeting_id).all()
     return templates.TemplateResponse(
         "meeting_detail.html",
-        {"request": request, "meeting": meeting, "documents": documents, "agenda_items": agenda_items},
+        {
+            "request": request,
+            "meeting": meeting,
+            "documents": documents,
+            "agenda_items": agenda_items,
+            **_meeting_source_context(db, meeting),
+        },
     )
 
 
@@ -191,7 +227,12 @@ def agenda_item_detail_page(agenda_item_id: uuid.UUID, request: Request, db: Ses
     meeting = db.get(Meeting, item.meeting_id)
     return templates.TemplateResponse(
         "agenda_item_detail.html",
-        {"request": request, "item": item, "meeting": meeting},
+        {
+            "request": request,
+            "item": item,
+            "meeting": meeting,
+            **_meeting_source_context(db, meeting),
+        },
     )
 
 

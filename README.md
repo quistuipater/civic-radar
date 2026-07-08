@@ -98,11 +98,16 @@ saved to `/archive` first.
   (same lesson as the 72/80 false-positive rate that killed auto-linking in
   `app/issue_matching.py`) — stores one meeting-level summary per minutes
   document instead, surfaced via the existing generic ai_outputs display on
-  the document detail page (no new UI needed). No heuristic fallback, same
-  reasoning as agenda-item extraction. Runs from `run_ai_pipeline` alongside
-  agenda-item extraction; existing already-classified minutes documents
-  needed `scripts/backfill_meeting_results.py` since the worker's AI batch
-  only queries documents *without* a classification yet.
+  the document detail page. No heuristic fallback, same reasoning as
+  agenda-item extraction. Runs from `run_ai_pipeline` alongside agenda-item
+  extraction; existing already-classified minutes documents needed
+  `scripts/backfill_meeting_results.py` since the worker's AI batch only
+  queries documents *without* a classification yet. Also surfaced directly
+  on the meeting and agenda-item detail pages ("What actually happened"),
+  alongside explicit links to the meeting's actual agenda/packet/minutes
+  documents (`_meeting_source_context()` in `app/dashboard.py`) — previously
+  the agenda-item page only linked up to its parent meeting, with no way to
+  jump straight to the source PDF or see whether/how it was decided.
 - **Semantic search**: `document_chunks.embedding` (pgvector) is populated
   automatically as documents are parsed; `/api/search` returns pgvector
   cosine-similarity matches (`semantic_matches`) alongside keyword results.
@@ -184,7 +189,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 483 tests / ~99% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 489 tests / ~99% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)

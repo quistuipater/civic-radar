@@ -7,6 +7,15 @@
   {% if item.item_number %} — item {{ item.item_number }}{% endif %}
 </p>
 
+{% if key_documents.agenda or key_documents.packet or key_documents.minutes %}
+<p class="muted">
+  Source:
+  {% if key_documents.agenda %}<a class="link" href="/documents/{{ key_documents.agenda.id }}">agenda</a>{% endif %}
+  {% if key_documents.packet %}{% if key_documents.agenda %} ·{% endif %} <a class="link" href="/documents/{{ key_documents.packet.id }}">packet</a>{% endif %}
+  {% if key_documents.minutes %}{% if key_documents.agenda or key_documents.packet %} ·{% endif %} <a class="link" href="/documents/{{ key_documents.minutes.id }}">minutes</a>{% else %} · minutes not yet available{% endif %}
+</p>
+{% endif %}
+
 <div class="panel">
   <p><strong>Action type:</strong> {{ item.action_type or '—' }}</p>
   <p><strong>Department:</strong> {{ item.department or '—' }}</p>
@@ -34,5 +43,21 @@
 {% if item.human_summary %}
 <h2>Human summary</h2>
 <p>{{ item.human_summary }}</p>
+{% endif %}
+
+{% if meeting_results and meeting_results.output_json %}
+<h2>What actually happened at this meeting</h2>
+<p class="muted">From the minutes — see prd.md/README on why this is meeting-level, not matched to this specific item.</p>
+<p>{{ meeting_results.output_json.overall_summary }}</p>
+{% if meeting_results.output_json.key_decisions %}
+<ul>
+  {% for d in meeting_results.output_json.key_decisions %}
+  <li><strong>{{ d.topic }}:</strong> {{ d.outcome }}{% if d.vote_tally %} ({{ d.vote_tally }}){% endif %}{% if d.notes %} — {{ d.notes }}{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% elif key_documents.minutes %}
+<h2>What actually happened at this meeting</h2>
+<p class="empty">Minutes are archived but haven't been summarized yet.</p>
 {% endif %}
 {% endblock %}

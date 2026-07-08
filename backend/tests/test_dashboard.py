@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.models import Issue, IssueLink, ManualSubmission
 
-from .conftest import make_agenda_item, make_alert, make_document, make_issue, make_meeting, make_source
+from .conftest import make_agenda_item, make_ai_output, make_alert, make_document, make_issue, make_meeting, make_source
 
 
 class TestHomePage:
@@ -161,6 +161,48 @@ class TestMeetingDetailPage:
         assert "June Agenda" in resp.text
         assert "Budget Item" in resp.text
 
+    def test_links_to_the_specific_agenda_and_minutes_documents(self, db, client):
+        agenda_doc = make_document(db, title="Real Agenda PDF", document_type="agenda")
+        minutes_doc = make_document(db, title="Real Minutes PDF", document_type="minutes")
+        meeting = make_meeting(
+            db, body="City Council", agenda_document_id=agenda_doc.id, minutes_document_id=minutes_doc.id
+        )
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert f'href="/documents/{agenda_doc.id}"' in resp.text
+        assert f'href="/documents/{minutes_doc.id}"' in resp.text
+
+    def test_shows_meeting_results_summary_when_available(self, db, client):
+        minutes_doc = make_document(db, document_type="minutes")
+        meeting = make_meeting(db, minutes_document_id=minutes_doc.id)
+        make_ai_output(
+            db,
+            minutes_doc.id,
+            task_type="meeting_results_summary",
+            output_json={
+                "overall_summary": "The council approved the budget amendment.",
+                "key_decisions": [{"topic": "Budget amendment", "outcome": "approved", "vote_tally": "4-1", "notes": None}],
+            },
+        )
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert "The council approved the budget amendment." in resp.text
+        assert "Budget amendment" in resp.text
+        assert "4-1" in resp.text
+
+    def test_shows_not_yet_summarized_when_minutes_exist_without_a_summary(self, db, client):
+        minutes_doc = make_document(db, document_type="minutes")
+        meeting = make_meeting(db, minutes_document_id=minutes_doc.id)
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert "haven&#39;t been summarized yet" in resp.text or "haven't been summarized yet" in resp.text
+
 
 class TestAgendaItemDetailPage:
     def test_returns_404_for_unknown_item(self, client):
@@ -177,6 +219,43 @@ class TestAgendaItemDetailPage:
         assert resp.status_code == 200
         assert "Zoning Variance" in resp.text
         assert "Planning Commission" in resp.text
+
+    def test_links_to_the_meetings_agenda_and_minutes_documents(self, db, client):
+        agenda_doc = make_document(db, document_type="agenda")
+        minutes_doc = make_document(db, document_type="minutes")
+        meeting = make_meeting(db, agenda_document_id=agenda_doc.id, minutes_document_id=minutes_doc.id)
+        item = make_agenda_item(db, meeting=meeting, title="Zoning Variance")
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert f'href="/documents/{agenda_doc.id}"' in resp.text
+        assert f'href="/documents/{minutes_doc.id}"' in resp.text
+
+    def test_shows_meeting_results_summary_when_available(self, db, client):
+        minutes_doc = make_document(db, document_type="minutes")
+        meeting = make_meeting(db, minutes_document_id=minutes_doc.id)
+        item = make_agenda_item(db, meeting=meeting, title="Approval of the Minutes")
+        make_ai_output(
+            db,
+            minutes_doc.id,
+            task_type="meeting_results_summary",
+            output_json={"overall_summary": "The committee approved the minutes as presented.", "key_decisions": []},
+        )
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert "The committee approved the minutes as presented." in resp.text
+
+    def test_no_source_document_links_shown_when_meeting_has_none_linked(self, db, client):
+        item = make_agenda_item(db, title="Standalone Item")
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert resp.status_code == 200
+        assert "Source:" not in resp.text
 
 
 class TestDocumentDetailPage:
