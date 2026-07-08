@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 69 tests / ~58% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 80 tests / ~59% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -276,7 +276,7 @@ container as dev — not sqlite, since several models depend on Postgres-only
 features (pgvector's `Vector`/`cosine_distance`, JSONB). Each test runs
 inside a transaction that's rolled back afterward for isolation, so the
 schema only needs to be created once per test session. As of 2026-07-08:
-58% overall coverage, concentrated on the areas that have had real live bugs
+59% overall coverage, concentrated on the areas that have had real live bugs
 (document-ingestion dedup + connector health tracking, crime-data validation
 logic, connector parsing). Not yet covered: the AI pipeline (needs live
 Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop.
