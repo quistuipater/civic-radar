@@ -106,3 +106,97 @@ class TestIngestCrimeSource:
         assert fetch.status == "error"
         assert fetch.validation_status == "error"
         assert source.consecutive_failures == 1
+
+    def test_feature_missing_its_external_id_field_is_skipped_not_counted(self, db, archive_root, monkeypatch):
+        source = make_source(db, name="Ventura PD", agency="Ventura Police Department", url="https://example.invalid/pd")
+        broken_feature = {**VENTURA_PD_FEATURE}
+        del broken_feature["GlobalID"]
+        monkeypatch.setattr(crime_data_module, "fetch_new_features", lambda *a, **k: [broken_feature])
+
+        created = ingest_crime_source(db, source)
+
+        assert created == 0
+        assert db.query(CrimeIncident).filter_by(source_id=source.id).count() == 0
+
+
+class TestIncrementalSyncCursor:
+    """AGENCY_CONFIG currently has no agency with a working created_date_field
+    (both Ventura PD and VC Sheriff fall back to full-refresh -- see the
+    module docstring for why), so this code path is real but not exercised
+    by production config today. Verified here via a hypothetical config
+    entry, in case a future agency actually has a usable cursor field.
+    """
+
+    def test_cursor_is_computed_from_the_latest_ingested_incidents_created_at(self, db, archive_root, monkeypatch):
+        fake_config = {
+            "external_id_field": "GlobalID",
+            "created_date_field": "created_date",
+            "incident_date_field": None,
+            "incident_date_end_field": None,
+            "field_map": {"report_number": "Report_Number"},
+        }
+        monkeypatch.setitem(crime_data_module.AGENCY_CONFIG, "Fake Agency", fake_config)
+        source = make_source(db, name="Fake Feed", agency="Fake Agency", url="https://example.invalid/fake")
+        db.add(
+            CrimeIncident(
+                source_id=source.id,
+                agency="Fake Agency",
+                external_id="already-ingested",
+                source_created_at=crime_data_module._epoch_ms_to_datetime(1700000000000),
+            )
+        )
+        db.commit()
+
+        seen_since = []
+        monkeypatch.setattr(
+            crime_data_module,
+            "fetch_new_features",
+            lambda url, since, **k: seen_since.append(since) or [],
+        )
+
+        ingest_crime_source(db, source)
+
+        assert seen_since == [1700000000000]
+
+    def test_no_prior_incidents_means_no_cursor_yet(self, db, archive_root, monkeypatch):
+        fake_config = {
+            "external_id_field": "GlobalID",
+            "created_date_field": "created_date",
+            "incident_date_field": None,
+            "incident_date_end_field": None,
+            "field_map": {"report_number": "Report_Number"},
+        }
+        monkeypatch.setitem(crime_data_module.AGENCY_CONFIG, "Fake Agency", fake_config)
+        source = make_source(db, name="Fake Feed", agency="Fake Agency", url="https://example.invalid/fake")
+        db.commit()
+
+        seen_since = []
+        monkeypatch.setattr(
+            crime_data_module,
+            "fetch_new_features",
+            lambda url, since, **k: seen_since.append(since) or [],
+        )
+
+        ingest_crime_source(db, source)
+
+        assert seen_since == [None]
+
+    def test_zero_new_features_on_an_incremental_source_is_ok_not_empty(self, db, archive_root, monkeypatch):
+        # Unlike full-refresh sources, 0 new rows since the last poll is the
+        # expected steady-state for an incremental source, not an anomaly.
+        fake_config = {
+            "external_id_field": "GlobalID",
+            "created_date_field": "created_date",
+            "incident_date_field": None,
+            "incident_date_end_field": None,
+            "field_map": {"report_number": "Report_Number"},
+        }
+        monkeypatch.setitem(crime_data_module.AGENCY_CONFIG, "Fake Agency", fake_config)
+        source = make_source(db, name="Fake Feed", agency="Fake Agency", url="https://example.invalid/fake")
+        db.commit()
+        monkeypatch.setattr(crime_data_module, "fetch_new_features", lambda *a, **k: [])
+
+        ingest_crime_source(db, source)
+
+        fetch = _latest_fetch(db, source.id)
+        assert fetch.validation_status == "ok"

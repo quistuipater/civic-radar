@@ -7,7 +7,9 @@ point at, so no mocking needed for those two. match_document_to_issue and
 suggest_issues_for_document are pure DB logic with no AI dependency at all.
 """
 
-from .conftest import make_ai_output, make_document
+import app.ai.summarize as summarize_module
+
+from .conftest import make_ai_output, make_document, make_prompt
 
 
 class TestListDocuments:
@@ -76,6 +78,22 @@ class TestTriggerSummarization:
     def test_returns_404_for_unknown_document(self, client):
         resp = client.post("/api/ai/summarize/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
+
+    def test_returns_summary_output_when_a_prompt_and_ollama_are_available(self, db, client, monkeypatch):
+        monkeypatch.setattr(summarize_module.ollama_client, "is_available", lambda: True)
+        monkeypatch.setattr(
+            summarize_module.ollama_client,
+            "generate_json",
+            lambda model, prompt: ({"plain_english_summary": "It happened."}, None),
+        )
+        make_prompt(db, prompt_key="document_summary", prompt_text="{title} {jurisdiction} {text}")
+        document = make_document(db, title="June Agenda")
+        db.commit()
+
+        resp = client.post(f"/api/ai/summarize/{document.id}")
+
+        assert resp.status_code == 200
+        assert resp.json()["output_json"]["plain_english_summary"] == "It happened."
 
 
 class TestTriggerIssueMatch:

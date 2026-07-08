@@ -1,0 +1,265 @@
+"""Tests for the server-rendered dashboard routes. classify_document_form
+calls the real classify_document -- safe without mocking since the test DB
+has no seeded Prompt rows, so it deterministically takes the heuristic path
+(same reasoning as the REST router tests).
+"""
+
+from datetime import datetime, timedelta, timezone
+
+from app.models import Issue, IssueLink, ManualSubmission
+
+from .conftest import make_agenda_item, make_alert, make_document, make_issue, make_meeting, make_source
+
+
+class TestHomePage:
+    def test_renders_with_data(self, db, client):
+        make_alert(db, alert_level=4, title="Urgent Alert")
+        make_source(db, consecutive_failures=5)
+        make_document(db, document_type="notice", title="Newest Notice")
+        make_meeting(db, start_time=datetime.now(timezone.utc) + timedelta(days=2))
+        db.commit()
+
+        resp = client.get("/")
+
+        assert resp.status_code == 200
+        assert "Urgent Alert" in resp.text
+        assert "Newest Notice" in resp.text
+
+    def test_snapshot_documents_are_excluded_from_newest_documents(self, db, client):
+        make_document(db, document_type="source_page_snapshot", title="A Snapshot")
+        db.commit()
+
+        resp = client.get("/")
+
+        assert "A Snapshot" not in resp.text
+
+
+class TestReviewQueuePage:
+    def test_renders_with_flagged_items(self, db, client):
+        make_alert(db, alert_level=4, title="Needs Review", reviewed=False)
+        db.commit()
+
+        resp = client.get("/review-queue")
+
+        assert resp.status_code == 200
+        assert "Needs Review" in resp.text
+
+
+class TestDashboardApproveReject:
+    def test_approve_marks_alert_reviewed_and_redirects(self, db, client):
+        alert = make_alert(db, reviewed=False)
+        db.commit()
+
+        resp = client.post(f"/review/{alert.id}/approve", follow_redirects=False)
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/review-queue"
+        db.refresh(alert)
+        assert alert.reviewed is True
+        assert alert.status == "approved"
+
+    def test_reject_marks_alert_reviewed_and_redirects(self, db, client):
+        alert = make_alert(db, reviewed=False)
+        db.commit()
+
+        resp = client.post(f"/review/{alert.id}/reject", follow_redirects=False)
+
+        assert resp.status_code == 303
+        db.refresh(alert)
+        assert alert.status == "rejected"
+
+    def test_approve_unknown_id_redirects_without_error(self, client):
+        resp = client.post(
+            "/review/00000000-0000-0000-0000-000000000000/approve", follow_redirects=False
+        )
+        assert resp.status_code == 303
+
+
+class TestIssueListPage:
+    def test_renders_with_issues(self, db, client):
+        make_issue(db, title="Downtown Parking Ordinance")
+        db.commit()
+
+        resp = client.get("/issues")
+
+        assert resp.status_code == 200
+        assert "Downtown Parking Ordinance" in resp.text
+
+
+class TestCreateIssueForm:
+    def test_creates_an_issue_and_redirects(self, db, client):
+        resp = client.post(
+            "/issues/new",
+            data={"title": "New Issue", "slug": "new-issue-form", "jurisdiction": "City of Ventura"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/issues"
+        assert db.query(Issue).filter_by(slug="new-issue-form").one().title == "New Issue"
+
+    def test_duplicate_slug_does_not_create_a_second_issue(self, db, client):
+        make_issue(db, slug="taken-slug")
+        db.commit()
+
+        client.post("/issues/new", data={"title": "Different Title", "slug": "taken-slug"}, follow_redirects=False)
+
+        assert db.query(Issue).filter_by(slug="taken-slug").count() == 1
+
+    def test_blank_optional_fields_are_stored_as_null(self, db, client):
+        client.post(
+            "/issues/new", data={"title": "Minimal Issue", "slug": "minimal-issue", "jurisdiction": "", "summary": ""}
+        )
+        issue = db.query(Issue).filter_by(slug="minimal-issue").one()
+        assert issue.jurisdiction is None
+        assert issue.summary is None
+
+
+class TestIssueDetailPage:
+    def test_returns_404_for_unknown_issue(self, client):
+        resp = client.get("/issues/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 404
+
+    def test_renders_with_linked_documents(self, db, client):
+        issue = make_issue(db, title="Findable Issue")
+        document = make_document(db, title="Linked Doc")
+        db.add(IssueLink(issue_id=issue.id, document_id=document.id))
+        db.commit()
+
+        resp = client.get(f"/issues/{issue.id}")
+
+        assert resp.status_code == 200
+        assert "Findable Issue" in resp.text
+        assert "Linked Doc" in resp.text
+
+
+class TestIssueBriefRedirect:
+    def test_redirects_to_the_api_endpoint(self, db, client):
+        issue = make_issue(db)
+        db.commit()
+
+        resp = client.get(f"/issues/{issue.id}/brief.md", follow_redirects=False)
+
+        assert resp.status_code == 307 or resp.status_code == 302
+        assert resp.headers["location"] == f"/api/issues/{issue.id}/brief.md"
+
+
+class TestMeetingDetailPage:
+    def test_returns_404_for_unknown_meeting(self, client):
+        resp = client.get("/meetings/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 404
+
+    def test_renders_with_matching_documents_and_agenda_items(self, db, client):
+        meeting = make_meeting(db, body="City Council", start_time=datetime(2026, 6, 1, tzinfo=timezone.utc))
+        make_document(db, body="City Council", meeting_date=datetime(2026, 6, 1).date(), title="June Agenda")
+        make_agenda_item(db, meeting=meeting, title="Budget Item")
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert resp.status_code == 200
+        assert "June Agenda" in resp.text
+        assert "Budget Item" in resp.text
+
+
+class TestAgendaItemDetailPage:
+    def test_returns_404_for_unknown_item(self, client):
+        resp = client.get("/agenda-items/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 404
+
+    def test_renders_with_its_meeting(self, db, client):
+        meeting = make_meeting(db, body="Planning Commission")
+        item = make_agenda_item(db, meeting=meeting, title="Zoning Variance")
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert resp.status_code == 200
+        assert "Zoning Variance" in resp.text
+        assert "Planning Commission" in resp.text
+
+
+class TestDocumentDetailPage:
+    def test_returns_404_for_unknown_document(self, client):
+        resp = client.get("/documents/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 404
+
+    def test_renders_with_issue_links_and_all_issues_dropdown(self, db, client):
+        document = make_document(db, title="Findable Document")
+        issue = make_issue(db, title="Related Issue")
+        db.add(IssueLink(issue_id=issue.id, document_id=document.id))
+        db.commit()
+
+        resp = client.get(f"/documents/{document.id}")
+
+        assert resp.status_code == 200
+        assert "Findable Document" in resp.text
+        assert "Related Issue" in resp.text
+
+
+class TestClassifyDocumentForm:
+    def test_triggers_classification_and_redirects(self, db, client):
+        document = make_document(db, title="An ordinance about coastal development")
+        db.commit()
+
+        resp = client.post(f"/documents/{document.id}/classify", follow_redirects=False)
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == f"/documents/{document.id}"
+
+    def test_unknown_document_still_redirects_without_error(self, client):
+        resp = client.post(
+            "/documents/00000000-0000-0000-0000-000000000000/classify", follow_redirects=False
+        )
+        assert resp.status_code == 303
+
+
+class TestAttachIssueForm:
+    def test_attaches_document_to_issue(self, db, client):
+        document = make_document(db)
+        issue = make_issue(db)
+        db.commit()
+
+        resp = client.post(
+            f"/documents/{document.id}/attach-issue", data={"issue_id": str(issue.id)}, follow_redirects=False
+        )
+
+        assert resp.status_code == 303
+        assert db.query(IssueLink).filter_by(document_id=document.id, issue_id=issue.id).count() == 1
+
+    def test_reattaching_the_same_issue_does_not_create_a_duplicate_link(self, db, client):
+        document = make_document(db)
+        issue = make_issue(db)
+        db.add(IssueLink(issue_id=issue.id, document_id=document.id))
+        db.commit()
+
+        client.post(f"/documents/{document.id}/attach-issue", data={"issue_id": str(issue.id)})
+
+        assert db.query(IssueLink).filter_by(document_id=document.id, issue_id=issue.id).count() == 1
+
+
+class TestManualSubmissionFormPage:
+    def test_renders(self, client):
+        resp = client.get("/manual-submissions/new")
+        assert resp.status_code == 200
+
+
+class TestCreateManualSubmissionForm:
+    def test_creates_an_unverified_submission_and_redirects(self, db, client):
+        resp = client.post(
+            "/manual-submissions/new",
+            data={"submission_type": "text", "claimed_source": "Nextdoor", "content_text": "Someone said..."},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/review-queue"
+        submission = db.query(ManualSubmission).filter_by(claimed_source="Nextdoor").one()
+        assert submission.verified is False
+        assert submission.verification_status == "unresolved"
+
+    def test_blank_optional_fields_are_stored_as_null(self, db, client):
+        client.post("/manual-submissions/new", data={"submission_type": "text"})
+        submission = db.query(ManualSubmission).filter_by(submission_type="text").one()
+        assert submission.claimed_source is None
+        assert submission.content_text is None

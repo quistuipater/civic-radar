@@ -47,6 +47,16 @@ class TestGenericDiscover:
         found = generic.discover(html, "https://example.com")
         assert found[0].document_type == "notice"
 
+    def test_guesses_packet_type(self):
+        html = b'<a href="/file.pdf">June Agenda Packet</a>'
+        found = generic.discover(html, "https://example.com")
+        assert found[0].document_type == "packet"
+
+    def test_guesses_agenda_type(self):
+        html = b'<a href="/file.pdf">June Agenda</a>'
+        found = generic.discover(html, "https://example.com")
+        assert found[0].document_type == "agenda"
+
     def test_falls_back_to_pdf_type_when_nothing_matches(self):
         html = b'<a href="/file.pdf">Attachment A</a>'
         found = generic.discover(html, "https://example.com")

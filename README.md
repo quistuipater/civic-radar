@@ -155,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 331 tests / ~93% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 457 tests / ~99% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -348,11 +348,29 @@ bad document/source must not stop the rest), the alert-creation gate
 actually produced `output_json`), and `main()`'s loop-survives-a-crashing-
 tick behavior (tested by monkeypatching `time.sleep` to raise a sentinel
 exception, escaping the otherwise-infinite `while True` deterministically
-after exactly one iteration). Nothing is left uncovered project-wide except
-a handful of pre-existing partial gaps not on the original punch list
-(`dashboard.py` 50%, `export/markdown.py` 64%, `export/digest.py` 79%,
-`routers/crime_incidents.py` 69%, thin wrappers like `db.py`/`http_client.py`)
-— none of which have had a live bug, unlike everything above.
+after exactly one iteration). The remaining sweep closed every other gap:
+`dashboard.py`, `export/digest.py`, `routers/crime_incidents.py`, `db.py`,
+`http_client.py`, and `ingestion/pipeline.py`'s meeting-linking helpers
+(`_upsert_meeting`/`_link_meeting_document` — previously untested at 0%
+since the earlier `ingest_source` tests only used the `generic` connector,
+which never sets `meeting_date`/`body`; the `civicplus`/`primegov`
+connectors do, so this was a real gap, not dead code) are all now 100%.
+`crime_data.py`'s incremental-sync cursor path is also now tested (via a
+monkeypatched hypothetical `AGENCY_CONFIG` entry) even though no real
+agency currently uses it — both Ventura PD and VC Sheriff fall back to
+full-refresh, per the `created_date` bug above, but the code path itself
+is real and worth protecting in case a future agency has a genuinely
+usable cursor field. 99% overall coverage; the 6 remaining uncovered lines
+are either genuinely unreachable given FK constraints (`IssueLink.issue_id`
+can't dangle — same reasoning as `issue_matching.py`'s gaps) or the
+`if __name__ == "__main__":` guard in `worker.py`.
+
+Two real inconsistencies surfaced while writing these tests, not yet
+fixed (flagged, not silently changed): `GET /api/crime-incidents/{id}`
+returns a 200 with `{"error": "not found"}` for a missing ID rather than
+a real 404, unlike every other router; and `PATCH /api/manual-submissions/{id}`
+accepts and persists `operator_note`, but `ManualSubmissionOut` doesn't
+include that field, so it's never echoed back in the response.
 
 ### Re-running database setup
 

@@ -7,10 +7,18 @@ covers for the structured-data side of ingestion.
 
 import httpx
 
+from datetime import date, datetime, timedelta, timezone
+
 import app.ingestion.pipeline as pipeline_module
 from app.ingestion.connectors.base import DiscoveredDocument
-from app.ingestion.pipeline import _upsert_document, ingest_source
-from app.models import Document
+from app.ingestion.pipeline import (
+    _fetch_and_store_document,
+    _link_meeting_document,
+    _upsert_document,
+    _upsert_meeting,
+    ingest_source,
+)
+from app.models import Document, Fetch, Meeting
 
 from .conftest import make_source
 
@@ -189,3 +197,223 @@ class TestIngestSource:
 
         assert second_fetch.changed is False
         assert db.query(Document).filter_by(source_id=source.id, document_type="source_page_snapshot").count() == 1
+
+    def test_a_failed_document_download_is_skipped_not_fatal_to_the_rest_of_the_batch(self, db, archive_root, monkeypatch):
+        source = make_source(db, connector="generic")
+        page_html = (
+            b'<html><body>'
+            b'<a href="/broken.pdf">Broken</a>'
+            b'<a href="/ok.pdf">OK</a>'
+            b"</body></html>"
+        )
+
+        def fake_fetch(url, **kwargs):
+            if url == source.url:
+                return fake_response(page_html)
+            if url.endswith("/broken.pdf"):
+                raise httpx.ConnectError("connection refused")
+            return fake_response(b"%PDF-1.4 ok content", content_type="application/pdf")
+
+        monkeypatch.setattr(pipeline_module, "fetch_url", fake_fetch)
+
+        fetch = ingest_source(db, source)
+
+        assert fetch.validation_status == "ok"
+        docs = db.query(Document).filter_by(source_id=source.id, document_type="pdf").all()
+        assert len(docs) == 1
+
+
+class TestFetchAndStoreDocument:
+    def _make_fetch(self, db, source):
+        f = Fetch(source_id=source.id, status="ok")
+        db.add(f)
+        db.flush()
+        return f
+
+    def test_duplicate_content_is_skipped(self, db, archive_root, monkeypatch):
+        source = make_source(db)
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"same content", content_type="application/pdf"))
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="pdf")
+
+        first = _fetch_and_store_document(db, source, fetch, item)
+        second = _fetch_and_store_document(db, source, fetch, item)
+
+        assert first is True
+        assert second is False
+        assert db.query(Document).filter_by(source_id=source.id).count() == 1
+
+    def test_unknown_content_type_falls_back_to_url_extension(self, db, archive_root, monkeypatch):
+        source = make_source(db)
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(
+            pipeline_module, "fetch_url", lambda url, **k: fake_response(b"data", content_type="application/octet-stream")
+        )
+        item = DiscoveredDocument(url="https://example.invalid/report.csv", document_type="pdf")
+
+        _fetch_and_store_document(db, source, fetch, item)
+
+        doc = db.query(Document).filter_by(source_id=source.id).one()
+        assert doc.archive_path.endswith(".csv")
+
+    def test_unknown_content_type_and_no_url_extension_falls_back_to_bin(self, db, archive_root, monkeypatch):
+        source = make_source(db)
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(
+            pipeline_module, "fetch_url", lambda url, **k: fake_response(b"data", content_type="application/octet-stream")
+        )
+        item = DiscoveredDocument(url="https://example.invalid/download", document_type="pdf")
+
+        _fetch_and_store_document(db, source, fetch, item)
+
+        doc = db.query(Document).filter_by(source_id=source.id).one()
+        assert doc.archive_path.endswith(".bin")
+
+    def test_item_with_meeting_date_and_body_links_to_a_meeting(self, db, archive_root, monkeypatch):
+        source = make_source(db, jurisdiction="City of Ventura")
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"agenda content", content_type="application/pdf"))
+        item = DiscoveredDocument(
+            url="https://example.invalid/agenda.pdf",
+            document_type="agenda",
+            meeting_date=date(2026, 6, 1),
+            body="City Council",
+        )
+
+        _fetch_and_store_document(db, source, fetch, item)
+
+        meeting = db.query(Meeting).filter_by(jurisdiction="City of Ventura", body="City Council").one()
+        doc = db.query(Document).filter_by(source_id=source.id).one()
+        assert meeting.agenda_document_id == doc.id
+
+    def test_item_missing_meeting_date_does_not_create_a_meeting(self, db, archive_root, monkeypatch):
+        source = make_source(db)
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"content", content_type="application/pdf"))
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=None, body="City Council")
+
+        _fetch_and_store_document(db, source, fetch, item)
+
+        assert db.query(Meeting).count() == 0
+
+    def test_item_missing_body_does_not_create_a_meeting(self, db, archive_root, monkeypatch):
+        source = make_source(db)
+        fetch = self._make_fetch(db, source)
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"content", content_type="application/pdf"))
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=date(2026, 6, 1), body=None)
+
+        _fetch_and_store_document(db, source, fetch, item)
+
+        assert db.query(Meeting).count() == 0
+
+
+class TestUpsertMeeting:
+    def test_creates_a_new_meeting_when_none_exists(self, db):
+        source = make_source(db, jurisdiction="City of Ventura", agency="City Clerk")
+        item = DiscoveredDocument(
+            url="https://example.invalid/a.pdf",
+            document_type="agenda",
+            meeting_date=date(2026, 6, 1),
+            body="City Council",
+            meeting_type="Regular Meeting",
+        )
+
+        meeting = _upsert_meeting(db, source, item)
+
+        assert meeting.jurisdiction == "City of Ventura"
+        assert meeting.agency == "City Clerk"
+        assert meeting.body == "City Council"
+        assert meeting.meeting_type == "Regular Meeting"
+
+    def test_agency_falls_back_to_jurisdiction_when_source_has_none(self, db):
+        source = make_source(db, jurisdiction="City of Ventura", agency=None)
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=date(2026, 6, 1), body="City Council")
+
+        meeting = _upsert_meeting(db, source, item)
+
+        assert meeting.agency == "City of Ventura"
+
+    def test_reuses_existing_meeting_matching_jurisdiction_body_and_date(self, db):
+        source = make_source(db, jurisdiction="City of Ventura")
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=date(2026, 6, 1), body="City Council")
+
+        first = _upsert_meeting(db, source, item)
+        second = _upsert_meeting(db, source, item)
+
+        assert first.id == second.id
+        assert db.query(Meeting).count() == 1
+
+    def test_future_meeting_date_is_marked_scheduled(self, db):
+        source = make_source(db)
+        future_date = (datetime.now(timezone.utc) + timedelta(days=10)).date()
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=future_date, body="City Council")
+
+        meeting = _upsert_meeting(db, source, item)
+
+        assert meeting.status == "scheduled"
+
+    def test_past_meeting_date_is_marked_completed(self, db):
+        source = make_source(db)
+        past_date = (datetime.now(timezone.utc) - timedelta(days=10)).date()
+        item = DiscoveredDocument(url="https://example.invalid/a.pdf", document_type="agenda", meeting_date=past_date, body="City Council")
+
+        meeting = _upsert_meeting(db, source, item)
+
+        assert meeting.status == "completed"
+
+
+class TestLinkMeetingDocument:
+    def test_links_agenda_document_type(self, db):
+        source = make_source(db)
+        meeting = Meeting(jurisdiction=source.jurisdiction, agency="City Clerk", body="City Council")
+        db.add(meeting)
+        document = Document(source_id=source.id, archive_path="/a.pdf", content_hash="h1")
+        db.add(document)
+        db.flush()
+
+        _link_meeting_document(meeting, document, "agenda")
+
+        assert meeting.agenda_document_id == document.id
+
+    def test_links_packet_and_minutes_document_types_to_their_own_fields(self, db):
+        source = make_source(db)
+        meeting = Meeting(jurisdiction=source.jurisdiction, agency="City Clerk", body="City Council")
+        db.add(meeting)
+        packet_doc = Document(source_id=source.id, archive_path="/p.pdf", content_hash="h2")
+        minutes_doc = Document(source_id=source.id, archive_path="/m.pdf", content_hash="h3")
+        db.add_all([packet_doc, minutes_doc])
+        db.flush()
+
+        _link_meeting_document(meeting, packet_doc, "packet")
+        _link_meeting_document(meeting, minutes_doc, "minutes")
+
+        assert meeting.packet_document_id == packet_doc.id
+        assert meeting.minutes_document_id == minutes_doc.id
+
+    def test_unrecognized_document_type_is_a_no_op(self, db):
+        source = make_source(db)
+        meeting = Meeting(jurisdiction=source.jurisdiction, agency="City Clerk", body="City Council")
+        db.add(meeting)
+        document = Document(source_id=source.id, archive_path="/n.pdf", content_hash="h4")
+        db.add(document)
+        db.flush()
+
+        _link_meeting_document(meeting, document, "notice")
+
+        assert meeting.agenda_document_id is None
+        assert meeting.packet_document_id is None
+        assert meeting.minutes_document_id is None
+
+    def test_does_not_overwrite_an_already_linked_field(self, db):
+        source = make_source(db)
+        meeting = Meeting(jurisdiction=source.jurisdiction, agency="City Clerk", body="City Council")
+        db.add(meeting)
+        first_doc = Document(source_id=source.id, archive_path="/first.pdf", content_hash="h5")
+        second_doc = Document(source_id=source.id, archive_path="/second.pdf", content_hash="h6")
+        db.add_all([first_doc, second_doc])
+        db.flush()
+
+        _link_meeting_document(meeting, first_doc, "agenda")
+        _link_meeting_document(meeting, second_doc, "agenda")
+
+        assert meeting.agenda_document_id == first_doc.id
