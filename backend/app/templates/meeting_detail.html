@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting.body }} — Ventura Civic Radar{% endblock %}
+{% block content %}
+<h1>{{ meeting.body }}</h1>
+<p class="muted">{{ meeting.jurisdiction }} — {{ meeting.start_time.strftime('%Y-%m-%d') if meeting.start_time else 'date unknown' }} — status: {{ meeting.status }}</p>
+
+<h2>Documents</h2>
+{% if documents %}
+<table>
+  <tr><th>Type</th><th>Title</th><th>Parser status</th></tr>
+  {% for d in documents %}
+  <tr><td>{{ d.document_type }}</td><td><a class="link" href="/documents/{{ d.id }}">{{ d.title or '(untitled)' }}</a></td><td class="muted">{{ d.parser_status }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No documents linked to this meeting yet.</p>
+{% endif %}
+
+<h2>Agenda Items</h2>
+{% if agenda_items %}
+<table>
+  <tr><th>#</th><th>Title</th><th>Action type</th><th>Consent</th><th>Hearing</th><th>Vote</th></tr>
+  {% for item in agenda_items %}
+  <tr>
+    <td>{{ item.item_number or '' }}</td>
+    <td><a class="link" href="/agenda-items/{{ item.id }}">{{ item.title }}</a></td>
+    <td class="muted">{{ item.action_type or '' }}</td>
+    <td>{{ '✓' if item.consent_calendar else '' }}</td>
+    <td>{{ '✓' if item.public_hearing else '' }}</td>
+    <td>{{ '✓' if item.vote_expected else '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No agenda items extracted for this meeting yet.</p>
+{% endif %}
+{% endblock %}

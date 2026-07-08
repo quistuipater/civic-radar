@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} — Ventura Civic Radar{% endblock %}
+{% block content %}
+<h1>{{ item.title }}</h1>
+<p class="muted">
+  {% if meeting %}<a class="link" href="/meetings/{{ meeting.id }}">{{ meeting.body }}</a> — {{ meeting.jurisdiction }}{% endif %}
+  {% if item.item_number %} — item {{ item.item_number }}{% endif %}
+</p>
+
+<div class="panel">
+  <p><strong>Action type:</strong> {{ item.action_type or '—' }}</p>
+  <p><strong>Department:</strong> {{ item.department or '—' }}</p>
+  <p><strong>Consent calendar:</strong> {{ 'Yes' if item.consent_calendar else 'No' }}
+    &nbsp;<strong>Public hearing:</strong> {{ 'Yes' if item.public_hearing else 'No' }}
+    &nbsp;<strong>Vote expected:</strong> {{ 'Yes' if item.vote_expected else 'No' }}</p>
+  <p><strong>Review status:</strong> {{ item.review_status }}</p>
+</div>
+
+{% if item.description %}
+<h2>Description</h2>
+<p>{{ item.description }}</p>
+{% endif %}
+
+{% if item.staff_recommendation %}
+<h2>Staff recommendation</h2>
+<p>{{ item.staff_recommendation }}</p>
+{% endif %}
+
+{% if item.ai_summary %}
+<h2>AI summary</h2>
+<p>{{ item.ai_summary }}</p>
+{% endif %}
+
+{% if item.human_summary %}
+<h2>Human summary</h2>
+<p>{{ item.human_summary }}</p>
+{% endif %}
+{% endblock %}
