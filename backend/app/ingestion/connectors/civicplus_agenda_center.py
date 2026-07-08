@@ -23,7 +23,11 @@ LABEL_RE = re.compile(
 )
 
 
-def discover(html_bytes: bytes, base_url: str) -> list[DiscoveredDocument]:
+def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -> list[DiscoveredDocument]:
+    # source_body is intentionally unused here -- this connector derives a
+    # more accurate per-document body from each accordion category
+    # (category_name below), since one AgendaCenter source covers many
+    # governing bodies at once.
     soup = BeautifulSoup(html_bytes, "lxml")
     results: dict[str, DiscoveredDocument] = {}
 

@@ -40,7 +40,7 @@ DOCUMENT_TYPE_BY_TEMPLATE_NAME = {
 PDF_COMPILE_OUTPUT_TYPE = 1
 
 
-def discover(html_bytes: bytes, base_url: str) -> list[DiscoveredDocument]:
+def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -> list[DiscoveredDocument]:
     parsed = urlparse(base_url)
     tenant_root = f"{parsed.scheme}://{parsed.netloc}"
     committee_id = parse_qs(parsed.query).get("committee", ["1"])[0]
@@ -81,7 +81,15 @@ def discover(html_bytes: bytes, base_url: str) -> list[DiscoveredDocument]:
                 document_type=document_type,
                 title=f"{template_name} — {meeting.get('date') or meeting_date or ''}".strip(" —"),
                 meeting_date=meeting_date,
-                body="Board of Supervisors",
+                # PrimeGov's meeting-list API has no human-readable committee/body
+                # name (only a numeric committeeId) -- this connector is shared
+                # across multiple committees (Board of Supervisors id=1, Planning
+                # Commission id=85, ...), so the caller must pass the source's own
+                # `body` through rather than guessing. Previously hardcoded to
+                # "Board of Supervisors", which silently mislabeled every Planning
+                # Commission document (verified live 2026-07-08: 14 documents in
+                # the DB had the wrong body before this fix).
+                body=source_body or "Board of Supervisors",
                 meeting_type=template_name,
             )
     return list(results.values())

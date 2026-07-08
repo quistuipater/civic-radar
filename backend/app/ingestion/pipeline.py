@@ -84,7 +84,7 @@ def ingest_source(db: Session, source: Source) -> Fetch:
     discover_fn = CONNECTORS.get(source.connector, generic.discover)
     connector_crashed = False
     try:
-        discovered = discover_fn(body, source.url)
+        discovered = discover_fn(body, source.url, source_body=source.body)
     except Exception as exc:
         logger.exception("connector %s failed to parse source %s", source.connector, source.name)
         discovered = []

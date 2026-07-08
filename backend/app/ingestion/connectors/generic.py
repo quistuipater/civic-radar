@@ -16,7 +16,7 @@ from app.ingestion.connectors.base import DiscoveredDocument
 DOC_EXTENSIONS = (".pdf", ".doc", ".docx", ".csv")
 
 
-def discover(html_bytes: bytes, base_url: str) -> list[DiscoveredDocument]:
+def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -> list[DiscoveredDocument]:
     soup = BeautifulSoup(html_bytes, "lxml")
     found: dict[str, DiscoveredDocument] = {}
 

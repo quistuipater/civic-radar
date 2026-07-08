@@ -28,8 +28,17 @@ saved to `/archive` first.
   id 1) and the Planning Commission (committee id 85 — the RMA source
   originally pointed at a thin landing page with ~1 real PDF link; the real
   Planning Commission hearing content turned out to be the same PrimeGov
-  platform as BOS, just embedded as an iframe, verified live 2026-07-06); a
-  NetFile RSS connector that reads NetFile's real-time, unauthenticated
+  platform as BOS, just embedded as an iframe, verified live 2026-07-06).
+  Writing tests for this connector (2026-07-08) caught a real bug: `body`
+  was hardcoded to "Board of Supervisors" regardless of which committee was
+  being fetched, since PrimeGov's meeting-list API has no human-readable
+  committee name, only a numeric `committeeId` — silently mislabeling every
+  Planning Commission document and meeting (14 documents, 8 meetings in the
+  DB, corrected via a one-off UPDATE; no cross-contamination since no two
+  committees' meetings ever fell on the same date). Fixed by having the
+  connector take the source's own `body` as a parameter instead of
+  guessing — see `app/ingestion/connectors/primegov.py` and
+  `tests/test_primegov.py`; a NetFile RSS connector that reads NetFile's real-time, unauthenticated
   filing feed (`netfile.com/connect2/api/public/list/filing/rss/VCO/
   campaign.xml`) — the *interactive* NetFile portal sits behind Cloudflare
   Turnstile and we don't try to bypass that, but NetFile separately publishes
@@ -146,7 +155,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 41 tests / ~55% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 55 tests / ~57% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -267,7 +276,7 @@ container as dev — not sqlite, since several models depend on Postgres-only
 features (pgvector's `Vector`/`cosine_distance`, JSONB). Each test runs
 inside a transaction that's rolled back afterward for isolation, so the
 schema only needs to be created once per test session. As of 2026-07-08:
-55% overall coverage, concentrated on the areas that have had real live bugs
+57% overall coverage, concentrated on the areas that have had real live bugs
 (document-ingestion dedup + connector health tracking, crime-data validation
 logic, connector parsing). Not yet covered: the AI pipeline (needs live
 Ollama), OCR/parsing (needs real PDF fixtures), and the worker loop.

@@ -126,6 +126,27 @@ class TestIngestSource:
         docs = db.query(Document).filter_by(source_id=source.id, document_type="notice").all()
         assert len(docs) == 1
 
+    def test_source_body_is_passed_through_to_the_connector(self, db, archive_root, monkeypatch):
+        # Regression test for a live bug where the primegov connector ignored
+        # the source's body and hardcoded "Board of Supervisors" for every
+        # committee -- see tests/test_primegov.py for the connector-level fix.
+        # This test guards the pipeline side: whatever body the connector
+        # returns on a DiscoveredDocument must actually reach the Document row.
+        source = make_source(db, connector="generic", body="Planning Commission")
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"<html></html>"))
+
+        seen_kwargs = {}
+
+        def fake_discover(html_bytes, base_url, **kwargs):
+            seen_kwargs.update(kwargs)
+            return []
+
+        monkeypatch.setitem(pipeline_module.CONNECTORS, "generic", fake_discover)
+
+        ingest_source(db, source)
+
+        assert seen_kwargs.get("source_body") == "Planning Commission"
+
     def test_http_failure_is_flagged_error_and_increments_failure_count(self, db, archive_root, monkeypatch):
         source = make_source(db)
 
@@ -144,7 +165,7 @@ class TestIngestSource:
         source = make_source(db, connector="generic")
         monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(b"<html></html>"))
 
-        def broken_discover(html_bytes, base_url):
+        def broken_discover(html_bytes, base_url, **kwargs):
             raise ValueError("simulated connector bug")
 
         monkeypatch.setitem(pipeline_module.CONNECTORS, "generic", broken_discover)

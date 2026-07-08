@@ -18,7 +18,7 @@ from xml.etree import ElementTree
 from app.ingestion.connectors.base import DiscoveredDocument
 
 
-def discover(html_bytes: bytes, base_url: str) -> list[DiscoveredDocument]:
+def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -> list[DiscoveredDocument]:
     try:
         root = ElementTree.fromstring(html_bytes)
     except ElementTree.ParseError:
