@@ -12,14 +12,16 @@ saved to `/archive` first.
 
 ## What's implemented (Phase 0 scope)
 
-- **Source registry** seeded with 11 real, verified Ventura sources (see
+- **Source registry** seeded with 12 real, verified Ventura sources (see
   `backend/scripts/seed_sources.py`): City of Ventura AgendaCenter (all
   boards/committees), Ventura County Board of Supervisors (PrimeGov), Ventura
   County Planning Commission (PrimeGov), three more RMA hearing bodies
   (Cultural Heritage Board, Planning Director Hearings, Mobile Home Park Rent
   Review Board), Ventura County Elections, two NetFile RSS feeds (campaign
-  finance filings, and Statement of Economic Interests/Form 700), and two
-  crime-data feeds (Ventura PD, VC Sheriff — see "Crime incident data" below).
+  finance filings, and Statement of Economic Interests/Form 700), two
+  crime-data feeds (Ventura PD, VC Sheriff — see "Crime incident data" below),
+  and the City of Ventura's Granicus meeting-audio podcast feed (see "Meeting
+  audio transcription" below).
 - **Ingestion**: a CivicPlus AgendaCenter connector that parses the real
   accordion structure of `cityofventura.ca.gov/AgendaCenter` (21 categories,
   ~210 agenda/minutes documents as of last check); a PrimeGov connector that
@@ -120,6 +122,37 @@ saved to `/archive` first.
   June 11's correctly showed "not yet archived" rather than a dead link or
   silence. Narrowly scoped to items with "minutes" in the title, since the
   date regex isn't precise enough to run against arbitrary item text.
+- **Meeting audio transcription**: `app/ingestion/meeting_audio.py` polls the
+  City of Ventura's Granicus podcast RSS feed
+  (`cityofventura.granicus.com/Podcast.php?view_id=17`, covers all bodies) for
+  new meeting recordings, archives each MP3, and transcribes it with
+  speaker diarization via a standalone WhisperX service (`whisperx_service/`,
+  large-v3 + `pyannote/speaker-diarization-community-1`, runs on madhatter's
+  GPU over HTTP — same pattern as Ollama, so an unreachable transcription
+  service degrades gracefully rather than blocking ingestion). Stored as its
+  own `meeting_transcripts` table (segments as one JSONB blob) rather than
+  shoehorned into `Document`, same reasoning as `CrimeIncident` getting its
+  own table. Deliberately does **not** try to match a transcribed decision
+  back to a specific `agenda_items` row (same reasoning as
+  `meeting_results.py` above) — matching is coarser, linking a whole
+  recording to its whole `Meeting` by date/body. Verified live 2026-07-09
+  against a real 2-hour Arts & Culture Commission recording: 1,238 segments,
+  15 distinct speakers, correctly matched to its `Meeting` row, real
+  discussion content (not just vote tallies) transcribed accurately.
+  Real-world throughput is roughly 3-4 minutes of GPU processing per hour of
+  audio on the RTX 5060 Ti. Surfaced on the meeting detail page ("Meeting
+  Audio" section) with a link to a full segment-by-segment transcript page
+  (`/transcripts/{id}`). One operational finding: the CDN serving the audio
+  enclosures (`archive-video.granicus.com`) 403s this project's normal,
+  honest User-Agent string but allows a generic browser-like one — a static
+  UA-string filter, not a CAPTCHA/interactive bot-challenge (which this
+  project has never attempted to bypass, see NetFile/Elections above); scoped
+  narrowly to just the audio-download function, not the shared `fetch_url()`
+  every other source uses. The RTMP/CloudFront streaming endpoints Granicus
+  also exposes (`ASX.php`) were tried first and found completely
+  non-functional (port 1935 timeout, 403 on the CDN URL variants) — likely
+  vestigial Flash-era infrastructure; the podcast RSS feed's direct MP3 links
+  are the real working access point.
 - **Semantic search**: `document_chunks.embedding` (pgvector) is populated
   automatically as documents are parsed; `/api/search` returns pgvector
   cosine-similarity matches (`semantic_matches`) alongside keyword results.
@@ -201,7 +234,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 495 tests / ~99% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 535 tests / ~99% coverage as of 2026-07-09, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)
@@ -333,6 +366,24 @@ pulled. Without Ollama running, classification still works via the heuristic
 fallback (everything it produces is marked `confidence: low` and
 `human_review_required: true`, so it always lands in the review queue rather
 than being trusted outright).
+
+### Meeting-audio transcription (optional)
+
+Not a Docker Compose service — it needs a real GPU with meaningful VRAM
+headroom (large-v3 + alignment + diarization models loaded simultaneously),
+so it runs standalone on madhatter rather than being passed through into a
+container, same reasoning as Ollama. See `whisperx_service/README.md` for
+setup (creates its own venv, needs a Hugging Face token with the
+`pyannote/speaker-diarization-community-1` model's gated terms accepted) and
+start it with `uvicorn main:app --host 0.0.0.0 --port 8091` from that
+directory. Point the API/worker at it via `WHISPERX_BASE_URL` in `.env`
+(defaults to `http://madhatter.local:8091`). Without it reachable, the
+`granicus_podcast_rss` source just skips transcription on that poll and
+retries next cycle (`whisperx_client.is_available()`/`transcribe()` both
+degrade to `None` rather than raising) — everything else in the pipeline is
+unaffected. It's currently started via a plain `nohup` background process on
+madhatter (pid tracked manually), not a systemd unit or Compose service, so
+it won't survive a reboot on its own yet.
 
 ### Running tests
 

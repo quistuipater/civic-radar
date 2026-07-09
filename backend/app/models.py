@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Text,
@@ -176,6 +177,39 @@ class Meeting(Base):
     )
 
     agenda_items: Mapped[list["AgendaItem"]] = relationship(back_populates="meeting")
+
+
+class MeetingTranscript(Base):
+    """A WhisperX-transcribed, speaker-diarized meeting audio recording.
+    Not in prd.md's schema -- audio/diarized-segment data doesn't fit the
+    Document model any more than CrimeIncident's structured rows did, same
+    reasoning there (see app/ingestion/crime_data.py). Segments are stored
+    as one JSONB blob rather than one row per segment: there's no query
+    pattern here that needs filtering by individual segment, only "give me
+    this meeting's whole transcript" -- see app/ai/meeting_audio.py.
+    """
+
+    __tablename__ = "meeting_transcripts"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    # Nullable: matching an audio item back to a Meeting row is a best-effort
+    # date/body match against free-text RSS titles (see
+    # app/ingestion/meeting_audio.py) -- a failed match shouldn't mean
+    # dropping an otherwise-good transcript.
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("meetings.id"))
+    source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sources.id"))
+    title: Mapped[str | None] = mapped_column(Text)
+    archive_path: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    original_url: Mapped[str | None] = mapped_column(Text)
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+    language: Mapped[str | None] = mapped_column(Text)
+    speaker_count: Mapped[int | None] = mapped_column(Integer)
+    segments: Mapped[list | None] = mapped_column(JSONB)
+    model_name: Mapped[str] = mapped_column(Text, nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("source_id", "content_hash", name="uq_meeting_transcript_source_hash"),)
 
 
 class AgendaItem(Base):

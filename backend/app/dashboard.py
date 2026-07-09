@@ -27,6 +27,7 @@ from app.models import (
     IssueLink,
     ManualSubmission,
     Meeting,
+    MeetingTranscript,
     Source,
 )
 from app.routers.review import review_queue
@@ -176,7 +177,7 @@ def _meeting_source_context(db: Session, meeting: Meeting | None) -> dict:
     specific decision back to a specific agenda item isn't attempted.
     """
     if meeting is None:
-        return {"key_documents": {}, "meeting_results": None}
+        return {"key_documents": {}, "meeting_results": None, "transcripts": []}
     key_documents = {
         "agenda": db.get(Document, meeting.agenda_document_id) if meeting.agenda_document_id else None,
         "packet": db.get(Document, meeting.packet_document_id) if meeting.packet_document_id else None,
@@ -194,7 +195,13 @@ def _meeting_source_context(db: Session, meeting: Meeting | None) -> dict:
             .order_by(AiOutput.created_at.desc())
             .first()
         )
-    return {"key_documents": key_documents, "meeting_results": meeting_results}
+    transcripts = (
+        db.query(MeetingTranscript)
+        .filter(MeetingTranscript.meeting_id == meeting.id)
+        .order_by(MeetingTranscript.processed_at.asc())
+        .all()
+    )
+    return {"key_documents": key_documents, "meeting_results": meeting_results, "transcripts": transcripts}
 
 
 # "Approval of the Minutes" items describe the *prior* meeting(s) they're
@@ -288,6 +295,18 @@ def agenda_item_detail_page(agenda_item_id: uuid.UUID, request: Request, db: Ses
             "referenced_minutes": _referenced_minutes_documents(db, item, meeting),
             **_meeting_source_context(db, meeting),
         },
+    )
+
+
+@router.get("/transcripts/{transcript_id}")
+def transcript_detail_page(transcript_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+    transcript = db.get(MeetingTranscript, transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="transcript not found")
+    meeting = db.get(Meeting, transcript.meeting_id) if transcript.meeting_id else None
+    return templates.TemplateResponse(
+        "transcript_detail.html",
+        {"request": request, "transcript": transcript, "meeting": meeting},
     )
 
 

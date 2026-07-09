@@ -17,7 +17,18 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
-from app.models import AgendaItem, AiOutput, Alert, Document, Issue, ManualSubmission, Meeting, Prompt, Source
+from app.models import (
+    AgendaItem,
+    AiOutput,
+    Alert,
+    Document,
+    Issue,
+    ManualSubmission,
+    Meeting,
+    MeetingTranscript,
+    Prompt,
+    Source,
+)
 
 TEST_DATABASE_URL = settings.database_url.rsplit("/", 1)[0] + "/civic_radar_test"
 
@@ -223,6 +234,32 @@ def make_agenda_item(db, meeting: Meeting | None = None, **overrides) -> AgendaI
     db.add(item)
     db.flush()
     return item
+
+
+def make_meeting_transcript(db, meeting: Meeting | None = None, source: Source | None = None, **overrides) -> MeetingTranscript:
+    if source is None:
+        source = make_source(db, fetch_method="granicus_podcast_rss")
+    defaults = dict(
+        meeting_id=meeting.id if meeting else None,
+        source_id=source.id,
+        title="Test Meeting Recording",
+        archive_path="/archive/test/audio.mp3",
+        content_hash=uuid.uuid4().hex,
+        original_url="https://example.invalid/audio.mp3",
+        duration_seconds=120.0,
+        language="en",
+        speaker_count=2,
+        segments=[
+            {"start": 0.0, "end": 5.0, "text": "Good evening.", "speaker": "SPEAKER_00"},
+            {"start": 5.0, "end": 10.0, "text": "Motion carries.", "speaker": "SPEAKER_01"},
+        ],
+        model_name="whisperx-large-v3",
+    )
+    defaults.update(overrides)
+    transcript = MeetingTranscript(**defaults)
+    db.add(transcript)
+    db.flush()
+    return transcript
 
 
 def make_manual_submission(db, **overrides) -> ManualSubmission:

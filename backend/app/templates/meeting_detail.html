@@ -28,6 +28,21 @@
 <p class="empty">Minutes are archived but haven't been summarized yet.</p>
 {% endif %}
 
+{% if transcripts %}
+<h2>Meeting Audio</h2>
+<table>
+  <tr><th>Recording</th><th>Duration</th><th>Speakers</th><th>Language</th></tr>
+  {% for t in transcripts %}
+  <tr>
+    <td><a class="link" href="/transcripts/{{ t.id }}">{{ t.title or '(untitled recording)' }}</a></td>
+    <td class="muted">{{ '%d:%02d'|format((t.duration_seconds // 60)|int, (t.duration_seconds % 60)|int) if t.duration_seconds else 'unknown' }}</td>
+    <td class="muted">{{ t.speaker_count or 'unknown' }}</td>
+    <td class="muted">{{ t.language or 'unknown' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 <h2>Documents</h2>
 {% if documents %}
 <table>

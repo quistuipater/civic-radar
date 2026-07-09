@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     ollama_analysis_model: str = "llama3.1:8b"
     ollama_embedding_model: str = "nomic-embed-text"
 
+    whisperx_base_url: str = "http://madhatter.local:8091"
+
     worker_tick_seconds: int = 60
     ai_job_concurrency: int = 1
     http_user_agent: str = "VenturaCivicRadar/0.1 (+local civic monitoring)"

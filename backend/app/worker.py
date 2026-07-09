@@ -15,6 +15,7 @@ from app.alerting import create_alert_from_classification
 from app.config import settings
 from app.db import SessionLocal
 from app.ingestion.crime_data import ingest_crime_source
+from app.ingestion.meeting_audio import ingest_meeting_audio
 from app.ingestion.pipeline import ingest_source
 from app.issue_matching import match_document_to_issue
 from app.models import AiOutput, Document, Source
@@ -44,6 +45,8 @@ def run_ingestion_tick() -> None:
             try:
                 if source.fetch_method == "arcgis_feature_query":
                     ingest_crime_source(db, source)
+                elif source.fetch_method == "granicus_podcast_rss":
+                    ingest_meeting_audio(db, source)
                 else:
                     ingest_source(db, source)
             except Exception:

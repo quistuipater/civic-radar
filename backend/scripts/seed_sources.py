@@ -167,6 +167,38 @@ SOURCES = [
         ),
     ),
     dict(
+        name="City of Ventura Granicus — Meeting Audio Podcast Feed",
+        jurisdiction="City of Ventura",
+        agency=None,
+        body=None,
+        source_type="meeting_audio_feed",
+        authority_level="official_primary",
+        url="https://cityofventura.granicus.com/Podcast.php?view_id=17",
+        fetch_method="granicus_podcast_rss",
+        connector="none",
+        polling_interval_minutes=1440,
+        parser_type="whisperx_transcription",
+        notes=(
+            "Real, public, unauthenticated podcast RSS feed (verified live "
+            "2026-07-09) with direct MP3 enclosure links -- view_id=17 covers "
+            "all bodies (City Council plus every committee/commission), unlike "
+            "view_id=2 which is City Council only. The interactive video "
+            "player (ViewPublisher.php/MediaPlayer.php) uses a legacy RTMP "
+            "stream reference that timed out from every network path tried; "
+            "this podcast feed is the actual working access point, not a "
+            "workaround for anything gated. Each item is transcribed with "
+            "speaker diarization by a separate WhisperX service on madhatter "
+            "(whisperx_service/, GPU-bound, ~14x realtime -- a 2-hour meeting "
+            "costs about 9 minutes of processing) and stored in the "
+            "meeting_transcripts table -- structurally different from every "
+            "other source, same reasoning as crime_incidents. Matched back to "
+            "a Meeting row by date parsed from the item's own title (the "
+            "feed's pubDate is when the recording was posted, not the meeting "
+            "date) -- best-effort, not guaranteed for same-day multi-body "
+            "collisions. See app/ingestion/meeting_audio.py."
+        ),
+    ),
+    dict(
         name="Ventura County Sheriff's Office — NIBRS Crime Data",
         jurisdiction="Ventura County",
         agency="Ventura County Sheriff's Office",

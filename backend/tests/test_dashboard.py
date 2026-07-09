@@ -9,7 +9,16 @@ from datetime import date, datetime, timedelta, timezone
 import app.dashboard as dashboard_module
 from app.models import Issue, IssueLink, ManualSubmission
 
-from .conftest import make_agenda_item, make_ai_output, make_alert, make_document, make_issue, make_meeting, make_source
+from .conftest import (
+    make_agenda_item,
+    make_ai_output,
+    make_alert,
+    make_document,
+    make_issue,
+    make_meeting,
+    make_meeting_transcript,
+    make_source,
+)
 
 
 class TestHomePage:
@@ -203,6 +212,64 @@ class TestMeetingDetailPage:
         resp = client.get(f"/meetings/{meeting.id}")
 
         assert "haven&#39;t been summarized yet" in resp.text or "haven't been summarized yet" in resp.text
+
+    def test_shows_linked_meeting_audio_with_a_link_to_the_full_transcript(self, db, client):
+        meeting = make_meeting(db, body="City Council")
+        transcript = make_meeting_transcript(
+            db, meeting=meeting, title="City Council Meeting - July 7, 2026", duration_seconds=125.0, speaker_count=3
+        )
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert "City Council Meeting - July 7, 2026" in resp.text
+        assert f'href="/transcripts/{transcript.id}"' in resp.text
+        assert "2:05" in resp.text  # 125 seconds
+        assert "3" in resp.text  # speaker_count
+
+    def test_no_meeting_audio_section_when_there_are_no_transcripts(self, db, client):
+        meeting = make_meeting(db, body="City Council")
+        db.commit()
+
+        resp = client.get(f"/meetings/{meeting.id}")
+
+        assert "Meeting Audio" not in resp.text
+
+
+class TestTranscriptDetailPage:
+    def test_returns_404_for_unknown_transcript(self, client):
+        resp = client.get("/transcripts/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 404
+
+    def test_renders_transcript_with_segments_and_linked_meeting(self, db, client):
+        meeting = make_meeting(db, body="City Council")
+        transcript = make_meeting_transcript(
+            db,
+            meeting=meeting,
+            title="City Council Meeting - July 7, 2026",
+            segments=[
+                {"start": 0.0, "end": 5.0, "text": "Good evening everyone.", "speaker": "SPEAKER_00"},
+                {"start": 65.0, "end": 70.0, "text": "Motion carries five to zero.", "speaker": "SPEAKER_02"},
+            ],
+        )
+        db.commit()
+
+        resp = client.get(f"/transcripts/{transcript.id}")
+
+        assert resp.status_code == 200
+        assert "Good evening everyone." in resp.text
+        assert "Motion carries five to zero." in resp.text
+        assert "SPEAKER_00" in resp.text
+        assert f'href="/meetings/{meeting.id}"' in resp.text
+
+    def test_renders_without_a_linked_meeting(self, db, client):
+        transcript = make_meeting_transcript(db, meeting=None)
+        db.commit()
+
+        resp = client.get(f"/transcripts/{transcript.id}")
+
+        assert resp.status_code == 200
+        assert "not linked to a specific meeting" in resp.text
 
 
 class TestAgendaItemDetailPage:
