@@ -372,18 +372,18 @@ than being trusted outright).
 Not a Docker Compose service — it needs a real GPU with meaningful VRAM
 headroom (large-v3 + alignment + diarization models loaded simultaneously),
 so it runs standalone on madhatter rather than being passed through into a
-container, same reasoning as Ollama. See `whisperx_service/README.md` for
-setup (creates its own venv, needs a Hugging Face token with the
-`pyannote/speaker-diarization-community-1` model's gated terms accepted) and
-start it with `uvicorn main:app --host 0.0.0.0 --port 8091` from that
-directory. Point the API/worker at it via `WHISPERX_BASE_URL` in `.env`
-(defaults to `http://madhatter.local:8091`). Without it reachable, the
+container, same reasoning as Ollama. Runs as a `systemd --user` service on
+madhatter (`~/.config/systemd/user/whisperx.service`, `loginctl
+enable-linger` enabled so it survives reboots without an active login
+session) — see `whisperx_service/README.md` for the unit file, setup (a
+Hugging Face token with the `pyannote/speaker-diarization-community-1`
+model's gated terms accepted), and management commands. Point the
+API/worker at it via `WHISPERX_BASE_URL` in `.env` (defaults to
+`http://madhatter.local:8091`). Without it reachable, the
 `granicus_podcast_rss` source just skips transcription on that poll and
 retries next cycle (`whisperx_client.is_available()`/`transcribe()` both
 degrade to `None` rather than raising) — everything else in the pipeline is
-unaffected. It's currently started via a plain `nohup` background process on
-madhatter (pid tracked manually), not a systemd unit or Compose service, so
-it won't survive a reboot on its own yet.
+unaffected.
 
 ### Running tests
 

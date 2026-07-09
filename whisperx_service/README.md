@@ -8,17 +8,44 @@ the worker container.
 
 ## Deploy on madhatter
 
-```
-cd /home/mgibbs/repos/whisperx
-source venv/bin/activate
-pip install -r requirements.txt   # this file, copied alongside main.py
-uvicorn main:app --host 0.0.0.0 --port 8091
+Runs as a `systemd --user` service (not Docker -- it needs direct GPU access
+and the venv already set up in `/home/mgibbs/repos/whisperx`, same reasoning
+as everything else in this file). Unit file:
+`~/.config/systemd/user/whisperx.service` on madhatter:
+
+```ini
+[Unit]
+Description=WhisperX transcription service (Ventura Civic Radar)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mgibbs/repos/whisperx
+ExecStart=/home/mgibbs/repos/whisperx/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8091
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/mgibbs/repos/whisperx/whisperx_service.log
+StandardError=append:/home/mgibbs/repos/whisperx/whisperx_service.log
+
+[Install]
+WantedBy=default.target
 ```
 
-Requires the HuggingFace access token already configured via
-`huggingface-cli login` (needed for the gated
-`pyannote/speaker-diarization-community-1` model) and that the account has
-accepted that model's terms on huggingface.co.
+`loginctl enable-linger mgibbs` is required so the user service starts at
+boot even without an active login session. Manage it with:
+
+```
+systemctl --user status whisperx.service
+systemctl --user restart whisperx.service
+journalctl --user -u whisperx.service -f   # or tail whisperx_service.log
+```
+
+To set this up from scratch (first-time install, not already-deployed
+madhatter): `pip install -r requirements.txt` (this file, copied alongside
+`main.py`) inside the venv, and a HuggingFace access token already
+configured via `huggingface-cli login` (needed for the gated
+`pyannote/speaker-diarization-community-1` model), with that account having
+accepted the model's terms on huggingface.co.
 
 ## API
 
