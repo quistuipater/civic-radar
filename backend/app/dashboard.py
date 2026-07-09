@@ -3,9 +3,11 @@ UX principles in 16.1 — no client-side framework, since this needs to run full
 local without a build step.
 """
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from dateutil import parser as dateutil_parser
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -195,6 +197,58 @@ def _meeting_source_context(db: Session, meeting: Meeting | None) -> dict:
     return {"key_documents": key_documents, "meeting_results": meeting_results}
 
 
+# "Approval of the Minutes" items describe the *prior* meeting(s) they're
+# approving in free text ("draft minutes from the April 9 and June 11, 2026
+# meetings") -- a completely different document than the current meeting's
+# own (usually not-yet-existing) minutes, which _meeting_source_context
+# can't resolve. Matches "Month Day" with an optional ", Year" so a list
+# like "April 9 and June 11, 2026" -- where only the last date states the
+# year -- still resolves both: any date missing a year borrows the one
+# year actually stated in the text.
+REFERENCED_DATE_RE = re.compile(r"([A-Z][a-z]+\.?\s+\d{1,2})(?:,?\s+(\d{4}))?")
+
+
+def _referenced_minutes_documents(db: Session, item: AgendaItem, meeting: Meeting | None) -> list[tuple]:
+    """For items about approving prior minutes specifically -- narrowly
+    scoped to that (rather than running on every item's description) since
+    the date regex isn't precise enough to risk false positives elsewhere.
+    Returns [(date, Document|None)], the document present only if that
+    date's minutes have actually been archived for this same body.
+    """
+    if meeting is None or "minutes" not in (item.title or "").lower():
+        return []
+    text = item.description or item.title or ""
+    matches = REFERENCED_DATE_RE.findall(text)
+    if not matches:
+        return []
+    shared_year = next((int(y) for _, y in matches if y), None)
+
+    results = []
+    seen_dates = set()
+    for month_day, year_str in matches:
+        year = int(year_str) if year_str else shared_year
+        if year is None:
+            continue
+        try:
+            parsed_date = dateutil_parser.parse(f"{month_day} {year}").date()
+        except (ValueError, OverflowError):
+            continue
+        if parsed_date in seen_dates:
+            continue
+        seen_dates.add(parsed_date)
+        document = (
+            db.query(Document)
+            .filter(
+                Document.document_type == "minutes",
+                Document.body == meeting.body,
+                Document.meeting_date == parsed_date,
+            )
+            .one_or_none()
+        )
+        results.append((parsed_date, document))
+    return sorted(results, key=lambda pair: pair[0])
+
+
 @router.get("/meetings/{meeting_id}")
 def meeting_detail_page(meeting_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     meeting = db.get(Meeting, meeting_id)
@@ -231,6 +285,7 @@ def agenda_item_detail_page(agenda_item_id: uuid.UUID, request: Request, db: Ses
             "request": request,
             "item": item,
             "meeting": meeting,
+            "referenced_minutes": _referenced_minutes_documents(db, item, meeting),
             **_meeting_source_context(db, meeting),
         },
     )

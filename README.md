@@ -107,7 +107,19 @@ saved to `/archive` first.
   alongside explicit links to the meeting's actual agenda/packet/minutes
   documents (`_meeting_source_context()` in `app/dashboard.py`) — previously
   the agenda-item page only linked up to its parent meeting, with no way to
-  jump straight to the source PDF or see whether/how it was decided.
+  jump straight to the source PDF or see whether/how it was decided. Also
+  handles "Approval of the Minutes" items specifically: these approve
+  *prior* meetings' minutes, named in the item's own description ("draft
+  minutes from the April 9 and June 11, 2026 meetings") — a completely
+  different document than the current meeting's own (usually not-yet-
+  existing) minutes. `_referenced_minutes_documents()` parses the date(s)
+  out of that description (handling shared-year list phrasing, where only
+  the last date states a year) and links to whichever have actually been
+  archived for that same body, verified live against a real Historic
+  Preservation Committee item: April 9's minutes were archived and linked,
+  June 11's correctly showed "not yet archived" rather than a dead link or
+  silence. Narrowly scoped to items with "minutes" in the title, since the
+  date regex isn't precise enough to run against arbitrary item text.
 - **Semantic search**: `document_chunks.embedding` (pgvector) is populated
   automatically as documents are parsed; `/api/search` returns pgvector
   cosine-similarity matches (`semantic_matches`) alongside keyword results.
@@ -189,7 +201,7 @@ saved to `/archive` first.
 - **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
   `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
   `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 489 tests / ~99% coverage as of 2026-07-08, see
+- **Test suite**: pytest, 495 tests / ~99% coverage as of 2026-07-08, see
   "Running tests" below.
 
 ## Known Phase 0 gaps (by design, not oversight)

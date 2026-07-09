@@ -16,6 +16,13 @@
 </p>
 {% endif %}
 
+{% if referenced_minutes %}
+<p class="muted">
+  Minutes being approved:
+  {% for d, doc in referenced_minutes %}{% if not loop.first %} ·{% endif %} {{ d.isoformat() }}{% if doc %} (<a class="link" href="/documents/{{ doc.id }}">view</a>){% else %} (not yet archived){% endif %}{% endfor %}
+</p>
+{% endif %}
+
 <div class="panel">
   <p><strong>Action type:</strong> {{ item.action_type or '—' }}</p>
   <p><strong>Department:</strong> {{ item.department or '—' }}</p>

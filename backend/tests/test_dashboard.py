@@ -4,8 +4,9 @@ has no seeded Prompt rows, so it deterministically takes the heuristic path
 (same reasoning as the REST router tests).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
+import app.dashboard as dashboard_module
 from app.models import Issue, IssueLink, ManualSubmission
 
 from .conftest import make_agenda_item, make_ai_output, make_alert, make_document, make_issue, make_meeting, make_source
@@ -256,6 +257,87 @@ class TestAgendaItemDetailPage:
 
         assert resp.status_code == 200
         assert "Source:" not in resp.text
+
+    def test_approval_of_minutes_item_links_to_the_specific_dates_it_references(self, db, client):
+        # Regression case: this exact item genuinely occurred in the DB --
+        # "Approval of the Minutes" for the Historic Preservation Committee,
+        # referencing "April 9 and June 11, 2026" in its own description,
+        # where only April 9's minutes had actually been archived.
+        meeting = make_meeting(db, body="Historic Preservation Committee")
+        archived_minutes = make_document(
+            db, body="Historic Preservation Committee", document_type="minutes", meeting_date=date(2026, 4, 9)
+        )
+        item = make_agenda_item(
+            db,
+            meeting=meeting,
+            title="Approval of the Minutes",
+            description="Approval of the draft minutes from the April 9 and June 11, 2026 meetings.",
+        )
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert "Minutes being approved:" in resp.text
+        assert f'href="/documents/{archived_minutes.id}"' in resp.text
+        assert "2026-04-09" in resp.text
+        assert "2026-06-11 (not yet archived)" in resp.text
+
+    def test_non_minutes_items_never_trigger_the_referenced_date_lookup(self, db, client):
+        meeting = make_meeting(db, body="City Council")
+        item = make_agenda_item(
+            db, meeting=meeting, title="Zoning Variance", description="Continued from the May 14, 2026 hearing."
+        )
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert "Minutes being approved:" not in resp.text
+
+    def test_minutes_item_with_no_dates_in_description_shows_nothing_extra(self, db, client):
+        meeting = make_meeting(db, body="City Council")
+        item = make_agenda_item(db, meeting=meeting, title="Approval of the Minutes", description="No dates mentioned.")
+        db.commit()
+
+        resp = client.get(f"/agenda-items/{item.id}")
+
+        assert "Minutes being approved:" not in resp.text
+
+
+class TestReferencedMinutesDocuments:
+    """Direct tests of the date-parsing edge cases -- no year stated
+    anywhere, an invalid calendar date, and a duplicate mention -- rather
+    than routing all three through the full HTTP stack.
+    """
+
+    def test_date_with_no_year_anywhere_in_the_text_is_skipped(self, db):
+        meeting = make_meeting(db, body="City Council")
+        item = make_agenda_item(db, meeting=meeting, title="Approval of the Minutes", description="From the April 9 meeting.")
+        db.commit()
+
+        assert dashboard_module._referenced_minutes_documents(db, item, meeting) == []
+
+    def test_invalid_calendar_date_is_skipped_not_crashed_on(self, db):
+        meeting = make_meeting(db, body="City Council")
+        item = make_agenda_item(
+            db, meeting=meeting, title="Approval of the Minutes", description="From the February 30, 2026 meeting."
+        )
+        db.commit()
+
+        assert dashboard_module._referenced_minutes_documents(db, item, meeting) == []
+
+    def test_duplicate_date_mention_is_deduplicated(self, db):
+        meeting = make_meeting(db, body="City Council")
+        item = make_agenda_item(
+            db,
+            meeting=meeting,
+            title="Approval of the Minutes",
+            description="From the April 9, 2026 meeting (April 9, 2026).",
+        )
+        db.commit()
+
+        results = dashboard_module._referenced_minutes_documents(db, item, meeting)
+
+        assert len(results) == 1
 
 
 class TestDocumentDetailPage:
