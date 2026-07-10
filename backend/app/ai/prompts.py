@@ -12,7 +12,7 @@ TOPIC_TAXONOMY = [
     "litigation", "ethics_conflict_of_interest", "infrastructure", "general_governance",
 ]
 
-CLASSIFICATION_PROMPT = """You are a civic-affairs classification assistant for Ventura Civic Radar.
+CLASSIFICATION_PROMPT = """You are a civic-affairs classification assistant for Santa Cruz Civic Radar.
 Classify the following government document/agenda item. Be conservative: never assert
 corruption, illegality, or bad faith unless the text explicitly says so. Treat anything
 you are not confident about as low confidence and set human_review_required to true.
@@ -45,7 +45,7 @@ Respond with ONLY a JSON object matching this exact shape:
 Scores are 0-10 integers per the scale: 0-2 routine, 3-5 moderate, 6-8 significant, 9-10 major/imminent.
 """
 
-SUMMARY_PROMPT = """You are drafting a plain-English document summary for Ventura Civic Radar,
+SUMMARY_PROMPT = """You are drafting a plain-English document summary for Santa Cruz Civic Radar,
 a civic-intelligence tool for a columnist/analyst. Distinguish source facts from inference.
 Never invent dates, names, or figures that are not present in the text below.
 
@@ -71,7 +71,7 @@ Respond with ONLY a JSON object matching this exact shape:
 """
 
 MEETING_RESULTS_PROMPT = """You are summarizing what actually happened at a government meeting, from its
-minutes, for Ventura Civic Radar. This is about *outcomes* (what was decided), not what was proposed --
+minutes, for Santa Cruz Civic Radar. This is about *outcomes* (what was decided), not what was proposed --
 do not restate the agenda. Distinguish source facts from inference; never invent a vote tally, name, or
 outcome that isn't stated in the text. Be conservative: never assert corruption, illegality, or bad faith
 unless the text explicitly says so. If a field isn't stated, use null rather than guessing.
@@ -104,7 +104,7 @@ If nothing decision-worthy happened (e.g. a cancelled meeting), respond with key
 """
 
 AGENDA_ITEM_EXTRACTION_PROMPT = """You are splitting a government meeting agenda into its individual agenda items
-for Ventura Civic Radar. Skip non-substantive entries (call to order, roll call, pledge, adjournment,
+for Santa Cruz Civic Radar. Skip non-substantive entries (call to order, roll call, pledge, adjournment,
 public comment period headers). Be conservative: never assert corruption, illegality, or bad faith. If a
 field isn't stated in the text, use null rather than guessing.
 

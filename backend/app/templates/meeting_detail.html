@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ meeting.body }} — Ventura Civic Radar{% endblock %}
+{% block title %}{{ meeting.body }} — Santa Cruz Civic Radar{% endblock %}
 {% block content %}
 <h1>{{ meeting.body }}</h1>
 <p class="muted">{{ meeting.jurisdiction }} — {{ meeting.start_time.strftime('%Y-%m-%d') if meeting.start_time else 'date unknown' }} — status: {{ meeting.status }}</p>

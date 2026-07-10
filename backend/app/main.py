@@ -14,7 +14,7 @@ from app.routers import (
     sources,
 )
 
-app = FastAPI(title="Ventura Civic Radar", version="0.1.0")
+app = FastAPI(title="Santa Cruz Civic Radar", version="0.1.0")
 
 app.include_router(sources.router)
 app.include_router(documents.router)
