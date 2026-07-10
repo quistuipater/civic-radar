@@ -61,6 +61,28 @@ SOURCES: list[dict] = [
         ),
     ),
     dict(
+        name="City of Boston Zoning Board of Appeal — Legistar",
+        jurisdiction="City of Boston",
+        agency="Zoning Board of Appeal",
+        body="Zoning Board of Appeal",
+        source_type="agenda_center",
+        authority_level="official_primary",
+        url="https://webapi.legistar.com/v1/boston/Events?bodyId=199",
+        fetch_method="legistar_api",
+        connector="none",
+        polling_interval_minutes=240,
+        parser_type="legistar_api",
+        notes=(
+            "Same Legistar platform and app/ingestion/legistar.py module as "
+            "the City Council source above -- BodyId=199, confirmed live "
+            "2026-07-10 (20 events with real agenda PDFs in a 4-month "
+            "lookback window). Boston's closest structural analog to "
+            "Ventura's county Planning Commission (a land-use hearing body), "
+            "even though Boston has no county layer for it to sit under. "
+            "Pure config addition, no new connector code."
+        ),
+    ),
+    dict(
         name="Boston Police Department — Crime Incident Reports",
         jurisdiction="City of Boston",
         agency="Boston Police Department",

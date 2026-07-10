@@ -14,13 +14,14 @@ saved to `/archive` first.
 brought to partial operational status for Boston, MA on 2026-07-10.** The
 engine (ingestion connectors, parsing, AI layer, dashboard, alerting) is
 generic and already works end-to-end against Ventura and, as of the same
-day, Santa Cruz (`../santa_cruz_civic_radar`). **4 real Boston sources are
+day, Santa Cruz (`../santa_cruz_civic_radar`). **5 real Boston sources are
 seeded and ingesting live**, verified against a real end-to-end run: City of
-Boston City Council agendas/minutes (Legistar), Boston Police Department
-crime incidents (ArcGIS), Massachusetts OCPF campaign-finance filings for
-the Mayor and City Council, and Elections-department public notices. One
-source category remains open — see "Known gaps" below, investigated and
-confirmed rather than unstarted.
+Boston City Council agendas/minutes (Legistar), Zoning Board of Appeal
+agendas/minutes (same Legistar platform), Boston Police Department crime
+incidents (ArcGIS), Massachusetts OCPF campaign-finance filings for the
+Mayor and City Council, and Elections-department public notices. One source
+category remains open — see "Known gaps" below, investigated and confirmed
+rather than unstarted.
 
 **Massachusetts's civic-government structure differs from California's in
 ways that shaped this research** — Boston is a consolidated city/county
@@ -39,10 +40,15 @@ filing officers the way NetFile-based sources have served both prior forks.
   (`webapi.legistar.com`), agenda/minutes PDFs are plain permanent URLs on
   `boston.legistar1.com` with no session-state dance needed, simpler than
   OnBase. Scoped to City Council (`BodyId=138`); Legistar also hosts every
-  other Boston body (Zoning Board of Appeal, School Committee, etc.) on the
-  same platform but those aren't seeded — School Committee specifically is
+  other Boston body on the same platform — School Committee specifically is
   excluded per this project's Phase 1 school-board boundary. Live run:
   **101 new agenda/minutes documents, 58 meetings**, correctly linked.
+- **City of Boston Zoning Board of Appeal — Legistar** (pure config, same
+  `app/ingestion/legistar.py` module as City Council above, just
+  `BodyId=199`). Boston's closest structural analog to Ventura's county
+  Planning Commission (a land-use hearing body) — Boston has no county
+  layer for it to sit under, but the function is the same. Live run:
+  **19 new agenda/minutes documents, 19 meetings**, correctly linked.
 - **Boston Police Department — Crime Incident Reports** (pure config, no new
   code — `app/ingestion/crime_data.py`'s `AGENCY_CONFIG`). Genuinely
   ArcGIS-FeatureServer-shaped, same platform as Ventura PD's feed. `OBJECTID`
