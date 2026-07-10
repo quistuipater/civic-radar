@@ -25,7 +25,7 @@ def sha256_hex(content: bytes) -> str:
 
 def archive_dir_for(jurisdiction: str | None, body: str | None, when: datetime) -> Path:
     """Mirrors the archive path convention in prd.md 9.3, e.g.
-    /archive/city_of_ventura/planning_commission/2026/2026-06-24/
+    /archive/city_of_boston/planning_commission/2026/2026-06-24/
     """
     root = Path(settings.archive_root)
     day = when.strftime("%Y-%m-%d")

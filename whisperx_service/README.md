@@ -1,51 +1,24 @@
 # WhisperX transcription service
 
 Thin FastAPI wrapper around WhisperX (transcription + alignment + speaker
-diarization). Runs on madhatter (GPU host) and is called over the network
-by the main app's `ingest_meeting_audio()` -- the same pattern this project
-already uses for Ollama, rather than bundling a GPU-dependent model into
-the worker container.
+diarization), meant to run standalone on a GPU host and be called over the
+network by `ingest_meeting_audio()` -- the same pattern this project already
+uses for Ollama, rather than bundling a GPU-dependent model into the worker
+container.
 
-## Deploy on madhatter
-
-Runs as a `systemd --user` service (not Docker -- it needs direct GPU access
-and the venv already set up in `/home/mgibbs/repos/whisperx`, same reasoning
-as everything else in this file). Unit file:
-`~/.config/systemd/user/whisperx.service` on madhatter:
-
-```ini
-[Unit]
-Description=WhisperX transcription service (Ventura Civic Radar)
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/home/mgibbs/repos/whisperx
-ExecStart=/home/mgibbs/repos/whisperx/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8091
-Restart=on-failure
-RestartSec=5
-StandardOutput=append:/home/mgibbs/repos/whisperx/whisperx_service.log
-StandardError=append:/home/mgibbs/repos/whisperx/whisperx_service.log
-
-[Install]
-WantedBy=default.target
-```
-
-`loginctl enable-linger mgibbs` is required so the user service starts at
-boot even without an active login session. Manage it with:
-
-```
-systemctl --user status whisperx.service
-systemctl --user restart whisperx.service
-journalctl --user -u whisperx.service -f   # or tail whisperx_service.log
-```
-
-To set this up from scratch (first-time install, not already-deployed
-madhatter): `pip install -r requirements.txt` (this file, copied alongside
-`main.py`) inside the venv, and a HuggingFace access token already
-configured via `huggingface-cli login` (needed for the gated
-`pyannote/speaker-diarization-community-1` model), with that account having
-accepted the model's terms on huggingface.co.
+**Not deployed for Boston yet.** This directory was forked from Ventura
+Civic Radar, where an identical service already runs on `madhatter.local:8091`
+via a `systemd --user` unit (see that project's `whisperx_service/README.md`
+for the working unit file/deployment steps to copy). No Boston meeting-audio
+source has been identified yet (see this repo's README TODO section), so
+there's nothing to transcribe until one is. If/when you do wire one in:
+**do not reuse port 8091 or the `~/repos/whisperx` directory** on madhatter
+for another instance -- Ventura's real deployment is already there, and a
+third civic-radar fork (Santa Cruz) has already claimed the "if you deploy
+one, don't collide with Ventura's" warning without actually deploying
+anything either. Either point Boston's `WHISPERX_BASE_URL` at the existing
+Ventura instance (fine if it's not saturated) or deploy a separate copy on
+its own port with its own systemd unit name.
 
 ## API
 

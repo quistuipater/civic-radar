@@ -120,7 +120,7 @@ def tick() -> None:
 
 
 def main() -> None:
-    logger.info("Ventura Civic Radar worker starting (tick every %ss)", settings.worker_tick_seconds)
+    logger.info("Boston Civic Radar worker starting (tick every %ss)", settings.worker_tick_seconds)
     while True:
         try:
             tick()

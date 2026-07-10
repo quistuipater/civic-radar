@@ -1,3 +1,18 @@
+> **FORK NOTE (Boston Civic Radar):** This document was written for
+> Ventura Civic Radar and inherited as-is when this repo was forked for
+> Boston, MA. The architecture below (schema, pipeline shape, AI
+> guardrails, phase structure) is city-agnostic and still applies. Anything
+> that names specific Ventura agencies, geography, or sources (e.g. "Ventura
+> County Board of Supervisors," "RMA," specific §13.1 source URLs) is stale
+> and should be re-derived for Boston via real source research (see
+> README.md's TODO section) rather than treated as a requirement for this
+> fork. Massachusetts's civic-government structure also differs from
+> California's in ways that matter here — Boston is a consolidated
+> city/county government (no independent Suffolk County government since
+> 1999), and campaign-finance disclosure runs through the state's OCPF
+> rather than county filing officers the way NetFile-based sources have
+> served every CA fork so far. Nothing below has been edited for Boston yet.
+
 # Product Requirements Document
 
 # Ventura Civic Radar

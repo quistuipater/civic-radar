@@ -12,7 +12,7 @@ def make_incident(db, source=None, **overrides):
         source = make_source(db, source_type="crime_data_feed", fetch_method="arcgis_feature_query")
     defaults = dict(
         source_id=source.id,
-        agency="Ventura Police Department",
+        agency="Test Police Department",
         external_id=overrides.pop("external_id", "ext-1"),
     )
     defaults.update(overrides)

@@ -6,15 +6,24 @@ for how this differs from the Document-based pipeline). Each poll's raw
 response is archived for archive-first, then rows are upserted into
 crime_incidents.
 
-Different agencies' FeatureServers have turned out to use different schemas
-(verified live 2026-07-07/08): Ventura PD has a stable GlobalID, a real
-Incident_Date_Start, and a created_date field usable as an incremental-sync
-cursor. VC Sheriff's NIBRS layer has none of that -- just Year (an integer,
-not a real date), no address, and FID (not GlobalID) as its designated
-unique id. AGENCY_CONFIG captures these per-agency differences; a source with
-no `created_date_field` falls back to a full re-fetch every poll (fine at
-VC Sheriff's ~25k-row scale; would need revisiting if it grew to Ventura PD's
-~84k-row scale).
+Different agencies' FeatureServers can use meaningfully different schemas --
+Ventura Civic Radar (this project's fork source) found one agency with a
+stable GlobalID, a real incident-date field, and a created_date field usable
+as an incremental-sync cursor, and a second agency with none of that (just
+an integer Year, no address, FID instead of GlobalID as the unique id) --
+AGENCY_CONFIG captures these per-agency differences; a source with no
+`created_date_field` falls back to a full re-fetch every poll. Before
+trusting any agency's `created_date`-shaped field as an incremental cursor,
+verify it actually varies per row and actually filters via `where` -- one of
+Ventura's two agencies had a field that looked like a per-record cursor but
+silently failed both checks (every row shared one bulk-load timestamp, and
+`where` filtering on it silently no-opped). No Boston agency has been added
+below yet -- Boston Police Department publishes a well-known open "Crime
+Incident Reports" dataset on Analyze Boston, but verify live whether it's
+actually ArcGIS-FeatureServer-shaped (what this module and
+arcgis_feature_service.py handle) or a different open-data platform
+(Socrata/CKAN) before assuming this connector applies as-is -- see this
+file's AGENCY_CONFIG and README's TODO section.
 """
 
 import logging
@@ -29,46 +38,35 @@ from app.models import CrimeIncident, Fetch, Source
 
 logger = logging.getLogger(__name__)
 
-AGENCY_CONFIG = {
-    "Ventura Police Department": {
-        "external_id_field": "GlobalID",
-        # created_date looked like a per-record cursor (esriFieldTypeDate,
-        # varies per esri docs) but turned out not to be usable as one --
-        # verified live 2026-07-08: every single one of the 84,327 rows
-        # shares the *exact same* created_date value (a bulk-load artifact,
-        # not "when this row was added"), AND the field silently fails to
-        # filter via `where` at all (a `created_date > TIMESTAMP '...'`
-        # query returns the full unfiltered count regardless of the
-        # threshold, while the same query against Incident_Date_Start
-        # filters correctly) -- so incremental sync via this field is
-        # unreliable twice over. Falls back to full re-fetch + dedupe by
-        # GlobalID every poll, same as VC Sheriff.
-        "created_date_field": None,
-        "incident_date_field": "Incident_Date_Start",
-        "incident_date_end_field": "Incident_Date_End",
-        "field_map": {
-            "report_number": "Report_Number",
-            "offense_category": "Offense_Category",
-            "offense_type": "Offense_Type",
-            "generalized_address": "GeneralizedAddress",
-            "council_district": "Council_District",
-            "beat": "Beat",
-            "community_council": "Community_Council",
-        },
-    },
-    "Ventura County Sheriff's Office": {
-        "external_id_field": "FID",
-        "created_date_field": None,
-        "incident_date_field": None,
-        "incident_date_end_field": None,
-        "field_map": {
-            "report_number": "Report_Number",
-            "offense_category": "Crime_Category",
-            "offense_type": "Public_Category",
-            "beat": "Beat",
-        },
-    },
-}
+# Keyed by Source.agency (exact string match). No Boston-area agency added
+# yet -- verify whether Boston PD's "Crime Incident Reports" open dataset
+# (published on Analyze Boston) is actually ArcGIS-FeatureServer-shaped
+# before assuming this module applies; if so, add an entry here matching
+# the pattern below. Example shape, generalized from Ventura Civic Radar's
+# real entries (field names below are illustrative, not real -- inspect the
+# actual FeatureServer's fields via its /query endpoint before filling this
+# in):
+#
+# AGENCY_CONFIG = {
+#     "Some Police Department": {
+#         "external_id_field": "GlobalID",  # or whatever the layer's unique id field is
+#         "created_date_field": None,  # only set this if it demonstrably varies per row
+#                                       # AND filters correctly via `where` -- verify both
+#                                       # before trusting it as an incremental cursor
+#         "incident_date_field": "Incident_Date_Start",
+#         "incident_date_end_field": "Incident_Date_End",
+#         "field_map": {
+#             "report_number": "Report_Number",
+#             "offense_category": "Offense_Category",
+#             "offense_type": "Offense_Type",
+#             "generalized_address": "GeneralizedAddress",
+#             "council_district": "Council_District",
+#             "beat": "Beat",
+#             "community_council": "Community_Council",
+#         },
+#     },
+# }
+AGENCY_CONFIG: dict = {}
 
 
 def _epoch_ms_to_datetime(ms: int | None) -> datetime | None:

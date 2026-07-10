@@ -1,8 +1,8 @@
-# Ventura Civic Radar
+# Boston Civic Radar
 
 Phase 0 prototype of the local-first civic intelligence system described in
-`prd.md`. It archives real government sources (agendas, staff reports,
-notices), extracts and classifies them, tracks them as "issues" over time, and
+`prd.md`. It archives government sources (agendas, staff reports, notices),
+extracts and classifies them, tracks them as "issues" over time, and
 generates reviewable alerts and Markdown briefs — all runnable on a single
 Docker Compose stack.
 
@@ -10,326 +10,191 @@ Docker Compose stack.
 summarized or classified without the raw source material being hashed and
 saved to `/archive` first.
 
-## What's implemented (Phase 0 scope)
+**This repo is a fork of [Ventura Civic Radar](../ventura_civic_radar),
+scaffolded for Boston, MA but not yet pointed at any real Boston sources.**
+The engine below (ingestion connectors, parsing, AI layer, dashboard,
+alerting) is generic and already works end-to-end against Ventura and, as of
+2026-07-10, Santa Cruz (`../santa_cruz_civic_radar`) — what's missing here is
+Boston-specific *configuration*: real source URLs, agency names, and
+possibly new connector code if Boston's platforms turn out to differ from
+what's already been seen. See "TODO: Boston source research" below for
+exactly what's left, and the Santa Cruz fork for a worked example of what
+that research + build process looks like end to end (2 of its 6 source
+categories needed genuinely new connectors, the rest were pure
+configuration).
 
-- **Source registry** seeded with 12 real, verified Ventura sources (see
-  `backend/scripts/seed_sources.py`): City of Ventura AgendaCenter (all
-  boards/committees), Ventura County Board of Supervisors (PrimeGov), Ventura
-  County Planning Commission (PrimeGov), three more RMA hearing bodies
-  (Cultural Heritage Board, Planning Director Hearings, Mobile Home Park Rent
-  Review Board), Ventura County Elections, two NetFile RSS feeds (campaign
-  finance filings, and Statement of Economic Interests/Form 700), two
-  crime-data feeds (Ventura PD, VC Sheriff — see "Crime incident data" below),
-  and the City of Ventura's Granicus meeting-audio podcast feed (see "Meeting
-  audio transcription" below).
-- **Ingestion**: a CivicPlus AgendaCenter connector that parses the real
-  accordion structure of `cityofventura.ca.gov/AgendaCenter` (21 categories,
-  ~210 agenda/minutes documents as of last check); a PrimeGov connector that
-  calls the open public JSON API directly (`ventura.primegov.com`) for real
-  agendas/packets/minutes, used by both the Board of Supervisors (committee
-  id 1) and the Planning Commission (committee id 85 — the RMA source
-  originally pointed at a thin landing page with ~1 real PDF link; the real
-  Planning Commission hearing content turned out to be the same PrimeGov
-  platform as BOS, just embedded as an iframe, verified live 2026-07-06).
-  Writing tests for this connector (2026-07-08) caught a real bug: `body`
-  was hardcoded to "Board of Supervisors" regardless of which committee was
-  being fetched, since PrimeGov's meeting-list API has no human-readable
-  committee name, only a numeric `committeeId` — silently mislabeling every
-  Planning Commission document and meeting (14 documents, 8 meetings in the
-  DB, corrected via a one-off UPDATE; no cross-contamination since no two
-  committees' meetings ever fell on the same date). Fixed by having the
-  connector take the source's own `body` as a parameter instead of
-  guessing — see `app/ingestion/connectors/primegov.py` and
-  `tests/test_primegov.py`; a NetFile RSS connector that reads NetFile's real-time, unauthenticated
-  filing feed (`netfile.com/connect2/api/public/list/filing/rss/VCO/
-  campaign.xml`) — the *interactive* NetFile portal sits behind Cloudflare
-  Turnstile and we don't try to bypass that, but NetFile separately publishes
-  this plain-HTTP RSS feed with no challenge at all, each item linking
-  directly to the filing PDF (verified live 2026-07-06: 24 real Form
-  460/470/501 filings archived on first run). Feed only covers a rolling
-  window (max 15 days/1000 items per NetFile's own feed description), so it's
-  for ongoing monitoring rather than historical backfill; and a generic
-  HTML/PDF-link harvester for everything else, which also now covers three
-  more RMA hearing bodies — Cultural Heritage Board and Planning Director
-  Hearings both have real, directly-harvestable hearing-notice/staff-report
-  PDFs (verified live); Mobile Home Park Rent Review Board's page is real but
-  currently has zero board-specific postings (just site-wide boilerplate
-  links) — kept as a source anyway per archive-first, so nothing is missed
-  once it does post something. Every fetch archives a raw page snapshot
-  first, regardless of what else it finds.
+**Massachusetts's civic-government structure differs from California's in
+ways that matter for source research** — see the TODO section below before
+assuming the CA-shaped category boundaries (e.g. "county campaign finance vs.
+city campaign finance") translate directly. Boston is a consolidated
+city/county government (Suffolk County has had no independent elected county
+government since 1999), and campaign finance disclosure in Massachusetts is
+administered by the state's Office of Campaign and Political Finance (OCPF),
+not county-level filing officers the way NetFile-based sources have been in
+both prior forks.
+
+## What's implemented (generic engine, carried over from Ventura Civic Radar)
+
+- **Source registry**: `backend/scripts/seed_sources.py` currently seeds
+  **zero sources** — see the TODO section below. The `Source` model/registry
+  itself (jurisdiction, agency, fetch method, polling interval, authority
+  level) is unchanged from Ventura's and ready to receive real entries.
+- **Ingestion connectors** (all generic, not Ventura-specific — each just
+  needs a real URL/config to point at, though Boston may need new connector
+  code the way Santa Cruz's City of Santa Cruz agendas and County Planning
+  Commission sources did):
+  - `app/ingestion/connectors/civicplus_agenda_center.py` — works against
+    any CivicPlus AgendaCenter site (accordion-structured agenda/minutes
+    listing).
+  - `app/ingestion/connectors/primegov.py` — calls PrimeGov's open public
+    JSON API directly for any `*.primegov.com` portal (no headless browser
+    needed). Both Ventura County and Santa Cruz County use this platform for
+    their Boards of Supervisors — worth checking whether Boston City
+    Council does, though Boston more commonly appears (per public record,
+    not yet verified live for this fork) to use Granicus's own Legislative
+    Information Center rather than PrimeGov.
+  - `app/ingestion/connectors/netfile_rss.py` — reads NetFile's
+    unauthenticated RSS filing feed for a given agency code (Ventura
+    County's is `VCO`; Santa Cruz has both a county code `SCCO` and a
+    separate city code `CRUZ`). Massachusetts campaign-finance disclosure
+    goes through OCPF, not county/city NetFile portals — check OCPF's own
+    platform and API/RSS surface (if any) before assuming this connector
+    applies at all.
+  - `app/ingestion/connectors/generic.py` — generic HTML/PDF-link harvester,
+    a reasonable default for any page that isn't one of the above platforms.
+  - `app/ingestion/arcgis_feature_service.py` + `app/ingestion/crime_data.py`
+    — syncs any public, unauthenticated ArcGIS FeatureServer (common for
+    police-department open-data crime dashboards) into a dedicated
+    `crime_incidents` table. `AGENCY_CONFIG` in `crime_data.py` is currently
+    empty — see that file's docstring for the field-mapping pattern to
+    follow once a real FeatureServer is found. Boston Police Department
+    publishes a well-known "Crime Incident Reports" open dataset on Analyze
+    Boston — verify live whether it's actually ArcGIS-FeatureServer-shaped
+    (what this connector handles) or a different open-data platform
+    (Socrata/CKAN are both common for city-run open-data portals and would
+    need different connector code entirely).
+  - `app/ingestion/meeting_audio.py` + `whisperx_service/` — polls a
+    Granicus podcast RSS feed for meeting audio and transcribes it with
+    speaker diarization via a standalone WhisperX service. Boston City
+    Council's meeting archive is commonly hosted on Granicus (verify live),
+    but Santa Cruz's experience is a caution here: its county Granicus
+    instance's podcast feed turned out to be unpopulated (zero items)
+    despite 200+ real video recordings existing, and its actual video
+    stream was CloudFront-gated — check whether Boston's podcast feed
+    actually has real enclosure items before assuming this connector works
+    as-is. See `whisperx_service/README.md` for what NOT to reuse from the
+    existing Ventura deployment if you do wire this in.
+  - Every fetch archives a raw page snapshot first, regardless of what else
+    it finds.
 - **Parsing**: PDF (via `pdfplumber`) and HTML text extraction, page-level
   chunking, and regex-based structured field extraction (ordinance/resolution/
-  project numbers, APNs). Pages with no embedded text (scanned/image-only,
-  e.g. some closed-session minutes) fall back to OCR (`pytesseract` +
-  `pdf2image`/poppler) automatically, page by page. Two safeguards keep
-  pathological inputs (some County board packets run 6,000+ pages) from
-  taking down the worker: an OCR-attempts cap per document, and a 120s
-  wall-clock budget for the whole parse, after which the document is marked
-  `parser_status=failed` with a clear error rather than hanging or OOMing.
+  project numbers, APNs, comment deadlines, public hearing dates). Pages with
+  no embedded text (scanned/image-only) fall back to OCR (`pytesseract` +
+  `pdf2image`/poppler) automatically, page by page. An OCR-attempts cap and a
+  120s wall-clock parse budget keep pathological inputs (Santa Cruz's fork
+  hit a real 900+ page City Council budget packet) from taking down the
+  worker. Extracted text is sanitized of embedded NUL bytes before storage —
+  a real bug found via that same 900+ page packet (Postgres TEXT columns
+  reject `\x00` outright); fixed upstream in both Ventura and Santa Cruz,
+  and this fork inherits the fix.
 - **AI layer**: a local Ollama client for classification, document
-  summarization, chunk embeddings (`nomic-embed-text`), and agenda-item
-  extraction, with a deterministic keyword/date heuristic fallback for
-  classification when Ollama is unreachable — the pipeline never blocks on
-  the model server being down (see `backend/app/ai/`). Prompts are versioned
-  in the `prompts` table. **Model note**: `gpt-oss:20b` produced
-  garbled/incoherent output when tested against madhatter (2026-07-05) —
-  likely an MXFP4 quantization/kernel issue, not a prompt problem, since even
-  a trivial "return this exact JSON" prompt came back as nonsense. Every
-  classification/summarization silently fell back to heuristics/errors as a
-  result until this was caught. `OLLAMA_TRIAGE_MODEL`/`OLLAMA_ANALYSIS_MODEL`
-  both use `llama3.1:8b` now (confirmed clean output on the same server) —
-  swap `gpt-oss:20b` back in only after separately confirming it produces
-  coherent output on whatever Ollama instance you're pointed at.
-- **Agenda-item extraction**: `app/ai/agenda_items.py` splits an `agenda`
-  document's text into individual `agenda_items` rows (item number, title,
-  department, action type, consent/hearing/vote flags) via the triage model,
-  linked through `Meeting.agenda_document_id` (now populated at ingestion
-  time — previously dead columns). No heuristic fallback; waits for a later
-  run if Ollama's unavailable.
-- **Meeting-results extraction**: `app/ai/meeting_results.py` summarizes what
-  *actually happened* at a meeting from its `minutes` document — overall
-  summary, per-topic outcomes (approved/denied/continued/withdrawn, vote
-  tally if stated), notable public comment, continued/tabled items — via a
-  dedicated `meeting_results_summary` prompt distinct from the generic
-  `document_summary` one (which is framed entirely around *proposed*
-  decisions — "key_decision_requested", "what_changes_from_current_policy" —
-  the wrong shape for a document reporting a decision already made).
-  Deliberately does **not** try to match each decision back to a specific
-  `agenda_items` row: item numbering/formatting drift too much between an
-  agenda and its minutes to do that reliably without a real trial run first
-  (same lesson as the 72/80 false-positive rate that killed auto-linking in
-  `app/issue_matching.py`) — stores one meeting-level summary per minutes
-  document instead, surfaced via the existing generic ai_outputs display on
-  the document detail page. No heuristic fallback, same reasoning as
-  agenda-item extraction. Runs from `run_ai_pipeline` alongside agenda-item
-  extraction; existing already-classified minutes documents needed
-  `scripts/backfill_meeting_results.py` since the worker's AI batch only
-  queries documents *without* a classification yet. Also surfaced directly
-  on the meeting and agenda-item detail pages ("What actually happened"),
-  alongside explicit links to the meeting's actual agenda/packet/minutes
-  documents (`_meeting_source_context()` in `app/dashboard.py`) — previously
-  the agenda-item page only linked up to its parent meeting, with no way to
-  jump straight to the source PDF or see whether/how it was decided. Also
-  handles "Approval of the Minutes" items specifically: these approve
-  *prior* meetings' minutes, named in the item's own description ("draft
-  minutes from the April 9 and June 11, 2026 meetings") — a completely
-  different document than the current meeting's own (usually not-yet-
-  existing) minutes. `_referenced_minutes_documents()` parses the date(s)
-  out of that description (handling shared-year list phrasing, where only
-  the last date states a year) and links to whichever have actually been
-  archived for that same body, verified live against a real Historic
-  Preservation Committee item: April 9's minutes were archived and linked,
-  June 11's correctly showed "not yet archived" rather than a dead link or
-  silence. Narrowly scoped to items with "minutes" in the title, since the
-  date regex isn't precise enough to run against arbitrary item text.
-- **Meeting audio transcription**: `app/ingestion/meeting_audio.py` polls the
-  City of Ventura's Granicus podcast RSS feed
-  (`cityofventura.granicus.com/Podcast.php?view_id=17`, covers all bodies) for
-  new meeting recordings, archives each MP3, and transcribes it with
-  speaker diarization via a standalone WhisperX service (`whisperx_service/`,
-  large-v3 + `pyannote/speaker-diarization-community-1`, runs on madhatter's
-  GPU over HTTP — same pattern as Ollama, so an unreachable transcription
-  service degrades gracefully rather than blocking ingestion). Stored as its
-  own `meeting_transcripts` table (segments as one JSONB blob) rather than
-  shoehorned into `Document`, same reasoning as `CrimeIncident` getting its
-  own table. Deliberately does **not** try to match a transcribed decision
-  back to a specific `agenda_items` row (same reasoning as
-  `meeting_results.py` above) — matching is coarser, linking a whole
-  recording to its whole `Meeting` by date/body. Verified live 2026-07-09
-  against a real 2-hour Arts & Culture Commission recording: 1,238 segments,
-  15 distinct speakers, correctly matched to its `Meeting` row, real
-  discussion content (not just vote tallies) transcribed accurately.
-  Real-world throughput is roughly 3-4 minutes of GPU processing per hour of
-  audio on the RTX 5060 Ti. Surfaced on the meeting detail page ("Meeting
-  Audio" section) with a link to a full segment-by-segment transcript page
-  (`/transcripts/{id}`). One operational finding: the CDN serving the audio
-  enclosures (`archive-video.granicus.com`) 403s this project's normal,
-  honest User-Agent string but allows a generic browser-like one — a static
-  UA-string filter, not a CAPTCHA/interactive bot-challenge (which this
-  project has never attempted to bypass, see NetFile/Elections above); scoped
-  narrowly to just the audio-download function, not the shared `fetch_url()`
-  every other source uses. The RTMP/CloudFront streaming endpoints Granicus
-  also exposes (`ASX.php`) were tried first and found completely
-  non-functional (port 1935 timeout, 403 on the CDN URL variants) — likely
-  vestigial Flash-era infrastructure; the podcast RSS feed's direct MP3 links
-  are the real working access point.
+  summarization, chunk embeddings (`nomic-embed-text`), agenda-item
+  extraction, and meeting-results extraction (what *actually happened* at a
+  meeting, distinct from what was proposed), with a deterministic
+  keyword/date heuristic fallback for classification when Ollama is
+  unreachable — the pipeline never blocks on the model server being down
+  (see `backend/app/ai/`). Prompts are versioned in the `prompts` table and
+  already reference "Boston Civic Radar" rather than Ventura's or Santa
+  Cruz's name. **Model note carried over from Ventura**: `gpt-oss:20b`
+  produced garbled/incoherent output when tested against `madhatter.local`
+  — `OLLAMA_TRIAGE_MODEL`/`OLLAMA_ANALYSIS_MODEL` default to `llama3.1:8b`;
+  re-verify before changing either, especially if pointing at a different
+  Ollama instance than Ventura's.
 - **Semantic search**: `document_chunks.embedding` (pgvector) is populated
   automatically as documents are parsed; `/api/search` returns pgvector
   cosine-similarity matches (`semantic_matches`) alongside keyword results.
 - **Issue tracking**: manual issue creation via API/dashboard, high-confidence
   auto-linking of documents to issues by exact project/ordinance/resolution
   number match, and a Markdown issue brief exporter matching the format in
-  `prd.md` section 28. Fuzzy semantic candidates (via `document_chunks`
-  embeddings) are available at `GET /api/documents/{id}/suggested-issues` for
-  a human to confirm through the existing manual-link endpoint — deliberately
-  **not** auto-linked. An auto-link version was tried and rejected: today's
-  issue-linked documents are whole multi-topic meeting packets, so their
-  mean-pooled embeddings are dominated by generic meeting-boilerplate rather
-  than actual topic, and it fuzzy-"matched" 72/80 clearly unrelated documents
-  in a live test (see `app/issue_matching.py` for detail and what would need
-  to change — e.g. per-agenda-item embeddings — before revisiting auto-link).
+  `prd.md` section 28. Fuzzy semantic candidates are available at
+  `GET /api/documents/{id}/suggested-issues` for a human to confirm —
+  deliberately **not** auto-linked (see `app/issue_matching.py` for why an
+  auto-link version was tried and rejected on Ventura's real corpus).
 - **Daily digest** (`prd.md` 9.9.4): `/digest` in the dashboard, or
   `GET /api/digest/daily.md` for a Markdown export. Seven sections — top
   changes, upcoming hearings/votes, new public notices, new campaign/election
   items, items needing human review, approaching deadlines, low-confidence/
-  unverified claims. Pure rollup of already-generated AI outputs (no new model
-  calls per digest run); internal/draft only, dashboard-only (not emailed —
-  `prd.md` 25's open question #6 resolved that way since there's no email
-  infra in this project). "Approaching deadlines" surfaces both
-  `comment_deadline` and `public_hearing_date` within the next 14 days —
-  populated by `extract_structured_fields()` (`app/parsing/extract.py`)
-  alongside the existing ordinance/resolution/project-number regexes, via a
-  first-pass heuristic over common civic-notice phrasings ("comments must be
-  received by...", "hearing will be held on...", both word orders) rather
-  than a full NLP date extractor. Backfilled against the existing corpus via
-  `scripts/backfill_deadline_extraction.py` (2026-07-08: 3 of 313 already-
-  parsed documents matched — real notices are simply thin on explicit "by
-  this date" language so far, not a sign the regex is broken; new documents
-  get it automatically at parse time going forward). A document with both
-  fields set in-window surfaces whichever is sooner, labeled `(comment
-  deadline)` or `(hearing)` so a reader knows which kind of date it is.
-- **Crime incident data**: `app/ingestion/crime_data.py` +
-  `app/ingestion/arcgis_feature_service.py` sync two agencies' public,
-  unauthenticated ArcGIS FeatureServers into a dedicated `crime_incidents`
-  table — structurally different from every other source (structured rows,
-  not documents), so it doesn't go through the Document/parse/classify
-  pipeline at all. **Both agencies do a full re-fetch + dedupe by external
-  ID every poll** (no reliable incremental cursor for either, see below);
-  fine at their current scale (43s/13s per poll respectively at 360min/
-  1440min intervals). **Ventura PD** (`OpenData_Police_Crimes`, backing the
-  city's "Community Crime Map" dashboard, verified live 2026-07-07): 84,327
-  records, deduped by `GlobalID`. Originally attempted incremental sync via
-  `created_date`, which turned out unreliable two independent ways (verified
-  live 2026-07-08): every row shares the *exact same* `created_date` value
-  (a bulk-load artifact, not a per-record "added at" timestamp), and the
-  field silently fails to filter via `where` at all regardless of that —
-  a `created_date > TIMESTAMP '...'` query returns the full unfiltered count
-  no matter the threshold, while the identical query against
-  `Incident_Date_Start` filters correctly. **VC Sheriff** (`NIBRS_Dashboard_2025`,
-  a separate ArcGIS org from the City's, verified live 2026-07-08): a
-  different schema entirely — no `GlobalID` (uses `FID`), no real incident
-  date (only an integer `Year`), no address field at all, and no
-  `created_date`-equivalent field either. Per-agency schema differences are
-  handled by `AGENCY_CONFIG` in `crime_data.py` rather than assuming one
-  layer's field names are universal. Esri's SQL dialect also rejects a raw
-  epoch-millis date comparison (`created_date > 1751000000000` → 400
-  "Invalid query parameters") — needs `TIMESTAMP 'YYYY-MM-DD HH:MM:SS'`
-  literal syntax instead, and rejects `orderByFields`/`where` referencing a
-  field a layer doesn't have — three real bugs hit live and fixed in this
-  feature so far. Browse via `GET /api/crime-incidents` (filterable by
-  `offense_category`, `beat`, `community_council`, `since`). VC Sheriff also
-  has UCR (1991-2023)/Traffic/Hate Crimes/Use of Force/RIPA dashboards on
-  the same platform — not yet added, FeatureServer URLs not yet traced.
-- **Connector health tracking**: every `Fetch` row (one per poll, across
-  both the Document-based and crime-data ingestion paths) now records
-  `items_found` (documents/links/features actually discovered, distinct
-  from "new" — a connector can succeed at the HTTP level while returning 0
-  items if a source's page structure changed) plus `validation_status`
-  (`ok`/`empty`/`schema_mismatch`/`error`) and `validation_message`. This
-  catches "fetch succeeded but the data looks wrong" cases that a plain
-  HTTP-status check misses entirely.
+  unverified claims.
+- **Meeting-results extraction**: `app/ai/meeting_results.py` summarizes what
+  *actually happened* at a meeting from its `minutes` document, distinct from
+  the generic `document_summary` prompt (which is framed around *proposed*
+  decisions, the wrong shape for a document reporting a decision already
+  made). Also handles "Approval of the Minutes" items specifically, which
+  approve *prior* meetings' minutes named in the item's own free-text
+  description rather than the current meeting's own minutes.
+- **Connector health tracking**: every `Fetch` row records `items_found`,
+  `validation_status` (`ok`/`empty`/`schema_mismatch`/`error`), and
+  `validation_message` — catches "fetch succeeded but the data looks wrong"
+  cases a plain HTTP-status check misses.
 - **Alerts**: levels 1-4 per `prd.md` 9.12, deduplicated per document+level.
-- **Dashboard**: server-rendered (Jinja2, no build step) — home, review queue,
-  sources, issues, meeting/document detail, manual submission form.
-- **REST API**: FastAPI, routes per `prd.md` section 17 (`/api/issues`,
-  `/api/documents`, `/api/alerts`, `/api/review-queue`, `/api/search`,
-  `/api/manual-submissions`, `/api/ai/*`, plus `/api/sources`).
-- **Test suite**: pytest, 535 tests / ~99% coverage as of 2026-07-09, see
-  "Running tests" below.
+- **Dashboard**: server-rendered (Jinja2, no build step) — home, review
+  queue, sources, issues, meeting/document/transcript detail, manual
+  submission form.
+- **REST API**: FastAPI, routes per `prd.md` section 17.
+- **Test suite**: pytest — see "Running tests" below for current counts.
+  Fixture defaults (`tests/conftest.py`) use "City of Boston" rather than
+  Ventura's jurisdiction name, but most individual tests exercise generic
+  logic and don't depend on the actual city name.
 
-## Known Phase 0 gaps (by design, not oversight)
+## TODO: Boston source research
 
-- **Elections (clerkrecorder.venturacounty.gov) sits behind an active AWS WAF
-  bot challenge** (`x-amzn-waf-action: challenge`, verified live 2026-07-06).
-  The page is real (candidate filing guides, vacancy notices, election
-  calendars) but its content isn't reachable without solving that challenge,
-  and we deliberately don't attempt to bypass it — the generic connector still
-  archives a raw page snapshot every cycle (nothing is silently missed) but
-  no real document discovery happens there. Flagged in the source's
-  `known_limitations` field. For a human to retrieve a specific document
-  themselves (in a real browser) and get it into the pipeline anyway, see
-  `scripts/ingest_manual_document.py` below. (NetFile was originally in this
-  same bucket — its *interactive* portal is genuinely Cloudflare-Turnstile-
-  gated, but it turned out NetFile separately publishes an unauthenticated
-  RSS feed of filings with no challenge at all, so
-  `app/ingestion/connectors/netfile_rss.py` now harvests real filings there
-  without needing a browser or manual retrieval. Board of Supervisors was a
-  similar story — see the PrimeGov note above.)
-- **The worker loop is a Python scheduler, not n8n** (polls sources on
-  `polling_interval_minutes`, fetches, parses, classifies, matches, alerts).
-  The PRD's recommended stack lists n8n, but we've deliberately decided
-  against swapping it in: it would add a new service plus new internal HTTP
-  endpoints just so n8n has something to call, for zero functional gain over
-  the current in-process Python loop — not worth the added fragility unless
-  a concrete need for n8n's UI/no-code workflow editing shows up later.
+Nothing below is wired in yet. This mirrors the categories Ventura Civic
+Radar (and, since, Santa Cruz Civic Radar) ended up with after their own
+source-discovery passes — use it as a checklist, not a guarantee any of
+these platforms are actually what Boston uses. Budget real time for this:
+Santa Cruz's pass found that only 2 of its 6 source categories were pure
+"seed the URL" wins — the rest needed genuinely new connector code because
+the real platform differed from what CivicPlus/PrimeGov/NetFile/ArcGIS
+already handle.
 
-## Potential future sources (investigated 2026-07-07, not yet built)
-
-A broader source-discovery pass turned these up. None are wired into the
-pipeline yet — listed here so the investigation doesn't need repeating.
-
-- **VC Sheriff's other dashboards** — same ArcGIS platform/org as the NIBRS
-  feed already ingested (`sheriff.venturacounty.gov/transparency-dashboard/
-  crime-traffic/`): 1991-2023 UCR Crime, Traffic, Hate Crimes, Use of Force,
-  RIPA. Underlying FeatureServer(s) for these specific dashboards not yet
-  traced (only NIBRS has been).
-- **City of Ventura Granicus archive**
-  (`cityofventura.granicus.com/ViewPublisher.php?view_id=2`) — has its own
-  official Agenda RSS feed, but appears to cover the same City Council/
-  Commission meetings already ingested via `civicplus_agenda_center`; likely
-  redundant unless the video/audio archive angle becomes valuable.
-- **Maven's Notebook** (`mavensnotebook.com`) — statewide California
-  water-policy news aggregator, not Ventura-specific, but has a real
-  "Ventura County" tag RSS feed (`mavensnotebook.com/tag/ventura-county/
-  feed/`). Would be a `media`-authority-level source per prd.md's authority
-  levels, and narrow (water-policy only), not general local news.
-- **VC Star / VC Reporter** — no RSS feed found on VC Star (tried common
-  patterns, all 404; Gannett papers have been dropping public RSS). VC
-  Reporter's feed URL wasn't resolved. The `rss.feedspot.com/ventura_*`
-  aggregator pages suggested weren't useful for either (one was
-  podcasts-only, the other didn't surface a working feed URL).
-- **Email newsletters** (e.g. `cityofventura.ca.gov/1013/Email-Newsletters`)
-  — a genuinely different connector shape than everything above (event-driven
-  via a mailbox, not HTTP-poll-based): would need a dedicated inbox, IMAP/
-  Gmail-API polling, and an HTML-email parser feeding into the archive
-  pipeline. Worth checking what a sample newsletter actually contains first
-  (may just re-link content already covered by other sources) before
-  building the ingestion side.
-- **Public health surveillance (CDC NWSS, WastewaterSCAN, CDC NSSP, CDC
-  FluView/RSV-NET)** — investigated 2026-07-08. CDC NSSP and FluView/RSV-NET
-  remain ruled out: state-level only by design (confirmed via each dataset's
-  schema — no county/sub-state field exists to filter on). WastewaterSCAN
-  monitors 90 sites nationwide (30 in California) via a plain public CSV
-  (`data.wastewaterscan.org/data/plant-points.csv`, found via browser
-  network inspection of their tracker page, no API key needed) but none are
-  in Ventura County (nearest: LA County/Carson, Lompoc, Ontario), and as of
-  2026-07-08 they've confirmed directly (email) that they aren't onboarding
-  new sites at all. Revisit specifically on/near the 1st of each month in
-  case that changes (standing memory note, not automated).
-
-  **Correction, found 2026-07-08 via CDPH's own dashboard rather than the
-  public NWSS jurisdiction API/dataset**: Ventura County is *not* fully dark.
-  CDPH's Cal-SuWers dashboard (`skylab.cdph.ca.gov/calwws`) lists an active
-  sewershed, **"Ventura (Oxnard)"** — samples through 2026-06-30, tracking
-  SARS-CoV-2, Influenza A, Influenza B, and RSV. Its `Data Source` field
-  reads **"CDC NWSS Commercial Contract (Verily)"**, a reporting pathway
-  distinct from the standard state/local-health-department-submitted NWSS
-  sites (which is why checking NWSS's own public jurisdiction list, as
-  originally done, missed it — that list apparently doesn't include
-  Verily-commercial-contract sites). Two caveats before wiring this in:
-  (1) the site covers **Oxnard's** treatment plant, not the City of
-  Ventura's own Water Reclamation Facility, so it's county-adjacent
-  coverage, not literally Ventura-city-level; (2) the dashboard is an R
-  Shiny app (`#shiny-tab-download` route) with a per-sample data table
-  (Region, County, County (City/Utility), Sample Date, PCR Gene Target,
-  Raw Concentration, Norm PMMoV, rolling averages, Data Source — filterable
-  by "County (City/Utility)" = `Ventura (Oxnard)`) and a **"Download Data"**
-  button, not a plain public CSV/API endpoint like WastewaterSCAN's — the
-  button is a Shiny `downloadHandler` tied to a stateful session, so a
-  connector would need browser automation (e.g. Playwright driving the
-  filter + click) rather than a simple HTTP GET. Not yet built; worth
-  prioritizing over the three ruled-out sources above since the data
-  actually exists for the county now.
+- [ ] **City of Boston council/committee agendas** — identify the platform.
+      Boston City Council's meeting archive is commonly associated with
+      Granicus (which would also cover meeting audio/video, see below), but
+      verify live rather than trusting public record — Santa Cruz's own
+      county Planning Commission turned out to be on a completely different,
+      much older platform than its Board of Supervisors despite both being
+      county bodies, so don't assume consistency across Boston's own bodies
+      either.
+- [ ] **Local police open crime data** — Boston Police Department publishes
+      a well-known "Crime Incident Reports" dataset on Analyze Boston
+      (data.boston.gov or analyzeboston.com — verify current URL). Check
+      whether it's actually ArcGIS FeatureServer-shaped (what
+      `app/ingestion/crime_data.py` and `arcgis_feature_service.py` handle)
+      or a Socrata/CKAN-style open-data platform, which would need different
+      connector code entirely. If ArcGIS-shaped, add an `AGENCY_CONFIG`
+      entry — but verify any `created_date`-like field actually varies per
+      row and filters correctly via `where` before trusting it as an
+      incremental-sync cursor (Ventura's didn't; this was a real live bug).
+- [ ] **Campaign finance / disclosure filings** — Massachusetts uses OCPF
+      (Office of Campaign and Political Finance) at the state level, not
+      county filing officers. Identify OCPF's actual publishing platform and
+      whether it exposes an RSS/API surface before assuming
+      `netfile_rss.py` applies — it's NetFile-specific and won't work
+      against a different platform without real adaptation.
+- [ ] **Elections office** notices/candidate filings (Massachusetts
+      Secretary of the Commonwealth's elections division, and/or Boston's
+      own Election Department).
+- [ ] **Meeting audio/video** — check whether Boston City Council's Granicus
+      instance (if it uses one) actually has a *populated* podcast RSS feed
+      before assuming `app/ingestion/meeting_audio.py` works as-is — Santa
+      Cruz's county Granicus instance had 200+ real video recordings but a
+      completely empty podcast feed, and its video stream turned out to be
+      CloudFront-gated and not pursued. Decide whether to point at the
+      existing Ventura WhisperX deployment or stand up a separate one (see
+      `whisperx_service/README.md` for what not to collide with).
+- [ ] Revisit `prd.md` for anything written specifically around Ventura's
+      geography/agencies that should be generalized or re-scoped for Boston
+      before treating it as the authoritative spec for this fork.
 
 ## Running it
 
@@ -342,15 +207,18 @@ docker compose run --rm api python scripts/seed_prompts.py
 docker compose up -d api worker
 ```
 
-Dashboard: http://localhost:8010 (mapped from container port 8000 — 8000 was
-already taken by something else on this machine; change the `api` port
-mapping in `docker-compose.yml` if you'd rather use 8000).
+Dashboard: http://localhost:8013 (mapped from container port 8000; offset
+from Ventura Civic Radar's 8010 and Santa Cruz's 8012 so all three stacks
+can run on the same host at once — see `docker-compose.yml` if you'd rather
+change it).
 
-API docs: http://localhost:8010/docs
+API docs: http://localhost:8013/docs
 
 The worker starts fetching immediately (any source with `last_fetched_at IS
 NULL` is due right away) and re-polls per `polling_interval_minutes`. Watch it
-with `docker compose logs -f worker`.
+with `docker compose logs -f worker`. With zero sources seeded, there's
+nothing for it to do yet — that's expected until the TODO list above is
+worked through.
 
 ### Local AI (optional but recommended)
 
@@ -365,109 +233,37 @@ Model names are configured via `OLLAMA_TRIAGE_MODEL` / `OLLAMA_ANALYSIS_MODEL`
 pulled. Without Ollama running, classification still works via the heuristic
 fallback (everything it produces is marked `confidence: low` and
 `human_review_required: true`, so it always lands in the review queue rather
-than being trusted outright).
+than being trusted outright). This stack's Ollama container is on host port
+11436 (offset from Ventura's 11434 and Santa Cruz's 11435) — consider
+pointing all three projects at one shared Ollama instance instead of running
+three, to avoid duplicating multi-GB model downloads.
 
 ### Meeting-audio transcription (optional)
 
 Not a Docker Compose service — it needs a real GPU with meaningful VRAM
-headroom (large-v3 + alignment + diarization models loaded simultaneously),
-so it runs standalone on madhatter rather than being passed through into a
-container, same reasoning as Ollama. Runs as a `systemd --user` service on
-madhatter (`~/.config/systemd/user/whisperx.service`, `loginctl
-enable-linger` enabled so it survives reboots without an active login
-session) — see `whisperx_service/README.md` for the unit file, setup (a
-Hugging Face token with the `pyannote/speaker-diarization-community-1`
-model's gated terms accepted), and management commands. Point the
-API/worker at it via `WHISPERX_BASE_URL` in `.env` (defaults to
-`http://madhatter.local:8091`). Without it reachable, the
-`granicus_podcast_rss` source just skips transcription on that poll and
-retries next cycle (`whisperx_client.is_available()`/`transcribe()` both
-degrade to `None` rather than raising) — everything else in the pipeline is
-unaffected.
+headroom, so it runs standalone on a GPU host rather than being passed
+through into a container, same reasoning as Ollama. No Boston meeting-audio
+source has been identified yet, so there's nothing to deploy until the TODO
+list above turns one up. See `whisperx_service/README.md` for what NOT to
+reuse from the existing Ventura deployment if you do wire one in.
 
 ### Running tests
 
 `docker compose run --rm api pytest` (add `--cov=app --cov-report=term-missing`
 for a coverage report). Tests run against a real `civic_radar_test` Postgres
-database — created automatically on first run, on the same `postgres`
-container as dev — not sqlite, since several models depend on Postgres-only
-features (pgvector's `Vector`/`cosine_distance`, JSONB). Each test runs
-inside a transaction that's rolled back afterward for isolation, so the
-schema only needs to be created once per test session. The `db` fixture's
-session uses `join_transaction_mode="create_savepoint"` (see
-`tests/conftest.py`) — required because application code under test calls
-`db.commit()`/`db.rollback()` for real (`ingest_source`, `ingest_crime_source`,
-`create_alert_from_classification`, ...); without it, an inner commit ends
-the fixture's own outer transaction, silently breaking isolation (caught
-live 2026-07-08 via an `ObjectDeletedError` on a test that called the same
-commit-triggering function twice). `db_session_factory` (also in
-`tests/conftest.py`) exposes that same sessionmaker directly, for the rare
-case where code under test opens its own sessions rather than taking a `db`
-param (`worker.py`'s `run_*()` functions each call `SessionLocal()` fresh) —
-monkeypatch `SessionLocal` to it and every session it creates still shares
-the one isolated connection/transaction. As of 2026-07-08:
-93% overall coverage: all ingestion connectors/fetchers (94-100%), alerting/
-scoring/heuristic classification (100%), the full REST router layer
-(97-100%, `tests/test_router_*.py`), issue matching (94%, `test_issue_matching.py`
-— exact-identifier auto-link priority/idempotency and the fuzzy-suggestion
-ranking/dedup/exclusion logic), OCR/parsing (`extract.py`/`service.py`,
-100%, `test_extract.py`/`test_parsing_service.py`), and the full AI
-orchestration layer (`ai/pipeline.py`, `ai/classify.py`, `ai/summarize.py`,
-`ai/embed.py`, `ai/agenda_items.py`, `ai/ollama_client.py`, all 100%). The
-router tests lean on the fact that `classify_document`/`summarize_document`
-already degrade deterministically with no Prompt rows seeded (heuristic
-fallback / 422 respectively) and `match_document_to_issue`/
-`suggest_issues_for_document` are pure DB logic, so none of that needed
-mocking there; the *dedicated* `test_classify.py`/`test_summarize.py`/
-`test_embed.py`/`test_agenda_items.py`/`test_ollama_client.py` add the
-actual model-call paths on top, all via `ollama_client` monkeypatching —
-worth calling out that `OLLAMA_BASE_URL` in this environment resolves to a
-genuinely reachable `madhatter.local`, which caused one early test-writing
-mistake to surface immediately as a real (rather than silently wrong) 404
-from the live server; every Ollama-touching test now explicitly controls
-`is_available()`/`generate_json()`/`embed()` rather than depending on
-whatever's reachable. `test_ai_pipeline.py` treats `run_ai_pipeline`'s four
-sub-steps as spies, testing only the gating logic (document type, parser
-status, classification idempotency) since each sub-step's own behavior is
-already covered elsewhere. The PDF-parsing tests mock `pdfplumber` entirely
-rather than using real PDF fixtures — the actual thing worth protecting is
-our own OCR-fallback/OCR-cap/`page.close()` logic (the exact fix for a live
-OOM crash on a 6,102-page packet), not whether pdfplumber itself works, and
-a real fixture couldn't practically exercise the OCR-cap or many-thousand-
-page cases anyway. The wall-clock-timeout test monkeypatches
-`PARSE_TIMEOUT_SECONDS` down to 1s to exercise the real `signal.alarm`-based
-mechanism without an actual 120s wait. `worker.py` (99%, `test_worker.py`)
-rounds this out: `is_due()`'s interval/boundary logic, the ingestion-tick
-enabled/due filtering and crime-vs-document routing, batch-size limits on
-the parsing/AI batches, per-item crash isolation in all three batches (one
-bad document/source must not stop the rest), the alert-creation gate
-(`create_alert_from_classification` only fires when the classification
-actually produced `output_json`), and `main()`'s loop-survives-a-crashing-
-tick behavior (tested by monkeypatching `time.sleep` to raise a sentinel
-exception, escaping the otherwise-infinite `while True` deterministically
-after exactly one iteration). The remaining sweep closed every other gap:
-`dashboard.py`, `export/digest.py`, `routers/crime_incidents.py`, `db.py`,
-`http_client.py`, and `ingestion/pipeline.py`'s meeting-linking helpers
-(`_upsert_meeting`/`_link_meeting_document` — previously untested at 0%
-since the earlier `ingest_source` tests only used the `generic` connector,
-which never sets `meeting_date`/`body`; the `civicplus`/`primegov`
-connectors do, so this was a real gap, not dead code) are all now 100%.
-`crime_data.py`'s incremental-sync cursor path is also now tested (via a
-monkeypatched hypothetical `AGENCY_CONFIG` entry) even though no real
-agency currently uses it — both Ventura PD and VC Sheriff fall back to
-full-refresh, per the `created_date` bug above, but the code path itself
-is real and worth protecting in case a future agency has a genuinely
-usable cursor field. 99% overall coverage; the 6 remaining uncovered lines
-are either genuinely unreachable given FK constraints (`IssueLink.issue_id`
-can't dangle — same reasoning as `issue_matching.py`'s gaps) or the
-`if __name__ == "__main__":` guard in `worker.py`.
+database — created automatically on first run — not sqlite, since several
+models depend on Postgres-only features (pgvector's `Vector`/
+`cosine_distance`, JSONB). Each test runs inside a transaction that's rolled
+back afterward for isolation.
 
-Two real inconsistencies surfaced while writing these tests, both since
-fixed: `GET /api/crime-incidents/{id}` used to return a 200 with
-`{"error": "not found"}` for a missing ID instead of a real 404 (now
-raises `HTTPException(404)` like every other router); and `PATCH
-/api/manual-submissions/{id}` accepted and persisted `operator_note` but
-`ManualSubmissionOut` never included it in the response (now does).
+This is the same test suite Ventura Civic Radar had at fork time (536 tests,
+~99% coverage, including the NUL-byte parsing fix), with `AGENCY_CONFIG`-
+dependent crime-data tests and a couple of fixture defaults updated to not
+assume a real Ventura agency/jurisdiction is configured (see
+`tests/test_crime_data.py`, `tests/conftest.py`) — the same adjustment
+already made for Santa Cruz's fork, copied directly since the underlying
+problem is identical. Re-run after making any Boston-specific changes to
+confirm nothing regressed.
 
 ### Re-running database setup
 
@@ -476,35 +272,36 @@ safe to re-run after pulling schema/prompt changes.
 
 ### Manually ingesting a document from a blocked source
 
-For Elections (see "Known Phase 0 gaps" above — NetFile now has an automated
-RSS path and doesn't need this): download the file yourself in a real
-browser, drop it under `./archive/_manual_incoming/` on the host
-(bind-mounted to `/archive/_manual_incoming/` in the container), then:
+For a source that turns out to be bot-walled or otherwise needs a human to
+fetch it in a real browser: drop the file under `./archive/_manual_incoming/`
+on the host (bind-mounted to `/archive/_manual_incoming/` in the container),
+then:
 
 ```bash
 docker compose run --rm api python scripts/ingest_manual_document.py \
-  --source "Elections" \
+  --source "<source name substring>" \
   --file /archive/_manual_incoming/some_notice.pdf \
   --document-type notice \
-  --title "Vacancy Notice -- District 3 Supervisor" \
-  --original-url "https://clerkrecorder.venturacounty.gov/elections/..."
+  --title "..." \
+  --original-url "https://..."
 ```
 
-For a batch (e.g. several files at once), write a CSV manifest instead —
-columns `file,title,document_type` plus optional `meeting_date,original_url`
-(paths relative to the manifest's own directory unless absolute):
+For a batch, write a CSV manifest instead — columns `file,title,document_type`
+plus optional `meeting_date,original_url` (paths relative to the manifest's
+own directory unless absolute):
 
 ```bash
 docker compose run --rm api python scripts/ingest_manual_document.py \
-  --source "Elections" --manifest /archive/_manual_incoming/manifest.csv
+  --source "<source name substring>" --manifest /archive/_manual_incoming/manifest.csv
 ```
 
 `--source` matches by case-insensitive substring against `Source.name` (must
-match exactly one). This hashes/archives the file and creates a `Document`
-row exactly like an automated fetch would (same dedup-by-hash, same archive
-path convention) — it then gets parsed/classified/embedded/matched/alerted
-automatically on the worker's next tick, no different from anything else in
-the pipeline. Re-running with the same file is a no-op (content-hash dedup).
+match exactly one — so at least one real source needs to be seeded first).
+This hashes/archives the file and creates a `Document` row exactly like an
+automated fetch would (same dedup-by-hash, same archive path convention) —
+it then gets parsed/classified/embedded/matched/alerted automatically on the
+worker's next tick. Re-running with the same file is a no-op
+(content-hash dedup).
 
 ## Project layout
 
@@ -525,10 +322,13 @@ backend/
     worker.py             scheduler loop (the "n8n stand-in" for Phase 0)
   scripts/
     init_db.py             create pgvector extension + all tables
-    seed_sources.py        seed the Phase 1 source registry
+    seed_sources.py        seed the source registry (currently empty -- see TODO above)
     seed_prompts.py         seed versioned prompt templates
+whisperx_service/          standalone meeting-audio transcription service (not yet deployed for Boston)
 archive/                  raw archived source material (gitignored)
 ```
 
 See `CLAUDE.md` for architecture notes aimed at future coding-agent sessions,
-and `prd.md` for the full product requirements this build follows.
+and `prd.md` for the full product requirements this build follows (written
+for Ventura originally — re-check anything geography/agency-specific before
+treating it as gospel for this fork).

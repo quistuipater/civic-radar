@@ -123,7 +123,7 @@ def archive_root(tmp_path, monkeypatch):
 def make_source(db, **overrides) -> Source:
     defaults = dict(
         name="Test Source",
-        jurisdiction="City of Ventura",
+        jurisdiction="City of Boston",
         agency="Test Agency",
         body=None,
         source_type="agenda_center",
@@ -209,7 +209,7 @@ def make_issue(db, **overrides) -> Issue:
 
 def make_meeting(db, **overrides) -> Meeting:
     defaults = dict(
-        jurisdiction="City of Ventura",
+        jurisdiction="City of Boston",
         agency="City Clerk",
         body="City Council",
         start_time=utcnow(),
