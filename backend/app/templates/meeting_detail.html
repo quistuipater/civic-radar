@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting.body }} — Ventura Civic Radar{% endblock %}
+{% block content %}
+<h1>{{ meeting.body }}</h1>
+<p class="muted">{{ meeting.jurisdiction }} — {{ meeting.start_time.strftime('%Y-%m-%d') if meeting.start_time else 'date unknown' }} — status: {{ meeting.status }}</p>
+
+{% if key_documents.agenda or key_documents.packet or key_documents.minutes %}
+<p class="muted">
+  Source:
+  {% if key_documents.agenda %}<a class="link" href="/documents/{{ key_documents.agenda.id }}">agenda</a>{% endif %}
+  {% if key_documents.packet %}{% if key_documents.agenda %} ·{% endif %} <a class="link" href="/documents/{{ key_documents.packet.id }}">packet</a>{% endif %}
+  {% if key_documents.minutes %}{% if key_documents.agenda or key_documents.packet %} ·{% endif %} <a class="link" href="/documents/{{ key_documents.minutes.id }}">minutes</a>{% else %} · minutes not yet available{% endif %}
+</p>
+{% endif %}
+
+{% if meeting_results and meeting_results.output_json %}
+<h2>What actually happened</h2>
+<p>{{ meeting_results.output_json.overall_summary }}</p>
+{% if meeting_results.output_json.key_decisions %}
+<ul>
+  {% for d in meeting_results.output_json.key_decisions %}
+  <li><strong>{{ d.topic }}:</strong> {{ d.outcome }}{% if d.vote_tally %} ({{ d.vote_tally }}){% endif %}{% if d.notes %} — {{ d.notes }}{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% elif key_documents.minutes %}
+<h2>What actually happened</h2>
+<p class="empty">Minutes are archived but haven't been summarized yet.</p>
+{% endif %}
+
+{% if transcripts %}
+<h2>Meeting Audio</h2>
+<table>
+  <tr><th>Recording</th><th>Duration</th><th>Speakers</th><th>Language</th></tr>
+  {% for t in transcripts %}
+  <tr>
+    <td><a class="link" href="/transcripts/{{ t.id }}">{{ t.title or '(untitled recording)' }}</a></td>
+    <td class="muted">{{ '%d:%02d'|format((t.duration_seconds // 60)|int, (t.duration_seconds % 60)|int) if t.duration_seconds else 'unknown' }}</td>
+    <td class="muted">{{ t.speaker_count or 'unknown' }}</td>
+    <td class="muted">{{ t.language or 'unknown' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h2>Documents</h2>
+{% if documents %}
+<table>
+  <tr><th>Type</th><th>Title</th><th>Parser status</th></tr>
+  {% for d in documents %}
+  <tr><td>{{ d.document_type }}</td><td><a class="link" href="/documents/{{ d.id }}">{{ d.title or '(untitled)' }}</a></td><td class="muted">{{ d.parser_status }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No documents linked to this meeting yet.</p>
+{% endif %}
+
+<h2>Agenda Items</h2>
+{% if agenda_items %}
+<table>
+  <tr><th>#</th><th>Title</th><th>Action type</th><th>Consent</th><th>Hearing</th><th>Vote</th></tr>
+  {% for item in agenda_items %}
+  <tr>
+    <td>{{ item.item_number or '' }}</td>
+    <td><a class="link" href="/agenda-items/{{ item.id }}">{{ item.title }}</a></td>
+    <td class="muted">{{ item.action_type or '' }}</td>
+    <td>{{ '✓' if item.consent_calendar else '' }}</td>
+    <td>{{ '✓' if item.public_hearing else '' }}</td>
+    <td>{{ '✓' if item.vote_expected else '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No agenda items extracted for this meeting yet.</p>
+{% endif %}
+{% endblock %}
