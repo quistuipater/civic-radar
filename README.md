@@ -94,34 +94,84 @@ URLs, agency names, and a couple of platform-specific field mappings. See
 
 ## TODO: Santa Cruz source research
 
-Nothing below is wired in yet. This mirrors the categories Ventura Civic
-Radar ended up with after its own source-discovery pass — use it as a
-checklist, not a guarantee any of these platforms are actually what Santa
-Cruz uses.
+Research pass done 2026-07-10 (live verification against real endpoints).
+Findings below are current as of that date; none are wired into
+`seed_sources.py` yet. Status legend: ✅ ready to seed now (existing
+connector, verified working) · 🔧 needs new connector code · ❌ not found /
+not pursued.
 
-- [ ] **City of Santa Cruz council/commission agendas** — identify the
-      platform (CivicPlus AgendaCenter? Granicus? Legistar? something else?)
-      and add a `Source` row in `backend/scripts/seed_sources.py`.
-- [ ] **Santa Cruz County Board of Supervisors** agendas/minutes — same
-      question; check for PrimeGov specifically since the connector already
-      handles it generically.
-- [ ] **Santa Cruz County Planning Commission** — may share whatever
-      platform the Board of Supervisors uses (it did for Ventura).
-- [ ] **Local police/sheriff open crime data** — look for a public ArcGIS
-      FeatureServer; if found, add an `AGENCY_CONFIG` entry in
-      `app/ingestion/crime_data.py` (verify any `created_date`-like field
-      actually varies per row and filters correctly via `where` before
-      trusting it as an incremental-sync cursor — Ventura's didn't).
-- [ ] **Campaign finance / Statement of Economic Interests filings** —
-      identify the filing platform (NetFile? something else?) before
-      assuming the existing NetFile connector applies.
-- [ ] **Elections office** notices/candidate filings.
-- [ ] **Meeting audio/video** — check whether local bodies use Granicus; if
-      so, decide whether to point at the existing Ventura WhisperX
-      deployment or stand up a second one (see `whisperx_service/README.md`).
+- 🔧 **City of Santa Cruz council/commission agendas** —
+      `ecm.cityofsantacruz.com/OnBaseAgendaOnline/` (Hyland OnBase, not
+      CivicPlus). Real, single page covers all boards/committees. Document
+      downloads are **not** a static link: the page does a 2-step
+      POST-then-GET AJAX flow
+      (`Documents/InvokeDownloadAttachment/...` →
+      `Documents/ViewDocument/...`) to resolve the actual PDF URL. Needs a
+      dedicated connector (session/cookie continuity across the 2 requests),
+      not the generic HTML/PDF harvester.
+- ✅ **Santa Cruz County Board of Supervisors** —
+      `santacruzcountyca.primegov.com`, **committeeId=1** confirmed via the
+      open JSON API (`/api/v2/PublicPortal/ListArchivedMeetingsByCommitteeId`)
+      — same unauthenticated API shape as Ventura's PrimeGov instance. Ready
+      to seed with the existing `primegov` connector.
+- 🔧 **Santa Cruz County Planning Commission** — does **not** share the
+      county's PrimeGov instance (checked committeeIds 1-20; only Board of
+      Supervisors, two Flood Control zones, Assessment Appeals, Consolidated
+      Redevelopment Oversight, Library Financing Authority, and City
+      Selection Committee exist there — no Planning Commission). Instead
+      uses a legacy classic-ASP frameset search tool at
+      `www2.santacruzcountyca.gov/planning/plnmeetings/Search/PLNSearch.asp`
+      (redirected from `sccounty01.co.santa-cruz.ca.us`) — no clean API,
+      frameset-based, query pattern not yet reverse-engineered. Real
+      connector-building work, not a quick win (unlike Ventura, where BOS
+      and Planning Commission shared one PrimeGov instance).
+- ❌ **Local police/sheriff open crime data** — not found. Checked both the
+      City of Santa Cruz's ArcGIS Hub (`data1-cruzgis.opendata.arcgis.com`,
+      59 datasets) and the County's (`opendata-sccgis.opendata.arcgis.com`,
+      176 datasets) — both have only jurisdiction-*boundary* layers ("Police
+      Beats", "Sheriff Beats"), no incident-level crime_incidents-equivalent
+      dataset. The city's own crime-stats page
+      (`www.santacruzca.gov/...`) is behind a site-wide Akamai bot wall
+      (confirmed 403 on the bare root page even with a browser UA) — not
+      pursued, consistent with this project's standing policy against
+      bypassing bot challenges. `AGENCY_CONFIG` in `crime_data.py` stays
+      empty for now.
+- ✅ **Campaign finance / Statement of Economic Interests filings** —
+      NetFile, confirmed live via the real RSS feed
+      (`netfile.com/connect2/api/public/list/filing/rss/<code>/campaign.xml`):
+      agency code **`SCCO`** for the county, **`CRUZ`** for the City of
+      Santa Cruz specifically (a *separate* feed from the county's — see
+      `EXPANSION_STRATEGY.md` in the Ventura repo for why this matters for
+      the city/county deployment model). Both ready to seed with the
+      existing `netfile_rss` connector; do the same for the `sei.xml`
+      variant on each code.
+- ✅ **Elections office** — `votescount.santacruzcountyca.gov`, confirmed
+      live, **no bot wall** (unlike Ventura's WAF-blocked Elections page —
+      works fine even with this project's own honest `SantaCruzCivicRadar`
+      User-Agent). Plain HTML with direct PDF links
+      (`/Portals/16/.../*.pdf`); the existing `generic` connector should
+      work as-is.
+- 🔧/❌ **Meeting audio/video** — County has a real Granicus instance
+      (`santacruzcountyca.granicus.com`) with 200+ real video recordings
+      going back to 2019 (confirmed via `ViewPublisher.php?view_id=2`), but
+      its `Podcast.php` RSS feed (the thing Ventura's `meeting_audio.py`
+      actually reads) returns **zero items** across every `view_id` tried —
+      podcast syndication isn't populated on this instance, unlike
+      Ventura's. City's OnBase platform has its own media player, but it
+      serves an **HLS stream** (`.m3u8` via a tokened CloudFront URL)
+      inside `Documents/Media/Validate`, not a static MP3 — the existing
+      `meeting_audio.py`/WhisperX pipeline assumes a direct MP3 enclosure
+      and won't work against either source as-is. Real new connector work
+      on both sides (RSS-feed-with-real-items doesn't exist for the county;
+      HLS/token handling doesn't exist for the city) — not a config change.
 - [ ] Revisit `prd.md` for anything written specifically around Ventura's
       geography/agencies that should be generalized or re-scoped for Santa
       Cruz before treating it as the authoritative spec for this fork.
+
+**Immediate next step**: seed the two ✅ items (PrimeGov Board of
+Supervisors, NetFile campaign finance + SEI for both `SCCO` and `CRUZ`) into
+`backend/scripts/seed_sources.py` and re-verify the worker actually ingests
+real documents — this is zero new code, just configuration.
 
 ## Running it
 
