@@ -6,7 +6,7 @@ a regression before it ships.
 
 import json
 
-from app.ingestion.connectors import generic, netfile_rss, ocpf
+from app.ingestion.connectors import boston_public_notices, generic, netfile_rss, ocpf
 
 
 class TestGenericDiscover:
@@ -135,3 +135,57 @@ class TestOcpfDiscover:
 
     def test_returns_empty_list_when_body_is_not_a_json_list(self):
         assert ocpf.discover(b'{"error": "nope"}', "https://api.ocpf.us/reports/log") == []
+
+
+class TestBostonPublicNoticesDiscover:
+    LISTING_HTML = """
+    <html><body>
+    <div class="n-li">
+      <a href="/public-notices/16599736" title="Board of Election Commissioners Meeting">Board of Election Commissioners Meeting</a>
+    </div>
+    <div class="n-li">
+      <a href="/public-notices/16599596" title="OPAT Civilian Review Board Public Meeting ">OPAT Civilian Review Board Public Meeting </a>
+    </div>
+    <nav><a href="/public-notices">Public Notices</a></nav>
+    </body></html>
+    """
+
+    def test_finds_notice_links_and_resolves_relative_urls(self):
+        found = boston_public_notices.discover(self.LISTING_HTML.encode(), "https://www.boston.gov/public-notices")
+        assert len(found) == 2
+        urls = {f.url for f in found}
+        assert urls == {
+            "https://www.boston.gov/public-notices/16599736",
+            "https://www.boston.gov/public-notices/16599596",
+        }
+
+    def test_uses_title_attribute_and_strips_whitespace(self):
+        found = boston_public_notices.discover(self.LISTING_HTML.encode(), "https://www.boston.gov/public-notices")
+        titles = {f.title for f in found}
+        assert "Board of Election Commissioners Meeting" in titles
+        assert "OPAT Civilian Review Board Public Meeting" in titles
+
+    def test_all_results_are_notice_type(self):
+        found = boston_public_notices.discover(self.LISTING_HTML.encode(), "https://www.boston.gov/public-notices")
+        assert all(f.document_type == "notice" for f in found)
+
+    def test_ignores_the_bare_listing_link_itself(self):
+        found = boston_public_notices.discover(self.LISTING_HTML.encode(), "https://www.boston.gov/public-notices")
+        assert all(f.url != "https://www.boston.gov/public-notices" for f in found)
+
+    def test_deduplicates_repeated_links(self):
+        html = b"""
+        <a href="/public-notices/1" title="First mention">First mention</a>
+        <a href="/public-notices/1" title="Second mention, same notice">Second mention, same notice</a>
+        """
+        found = boston_public_notices.discover(html, "https://www.boston.gov/public-notices")
+        assert len(found) == 1
+
+    def test_ignores_non_numeric_notice_paths(self):
+        html = b'<a href="/public-notices/page/2">Next page</a>'
+        assert boston_public_notices.discover(html, "https://www.boston.gov/public-notices") == []
+
+    def test_falls_back_to_link_text_when_no_title_attribute(self):
+        html = b'<a href="/public-notices/123">Some Notice</a>'
+        found = boston_public_notices.discover(html, "https://www.boston.gov/public-notices")
+        assert found[0].title == "Some Notice"

@@ -11,7 +11,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.archive import archive_dir_for, now_utc, sha256_hex, write_archive_file, write_metadata
-from app.ingestion.connectors import civicplus_agenda_center, generic, netfile_rss, ocpf, primegov
+from app.ingestion.connectors import boston_public_notices, civicplus_agenda_center, generic, netfile_rss, ocpf, primegov
 from app.ingestion.connectors.base import DiscoveredDocument
 from app.ingestion.http_client import fetch_url
 from app.models import Document, Fetch, Meeting, Source
@@ -24,6 +24,7 @@ CONNECTORS = {
     "primegov": primegov.discover,
     "netfile_rss": netfile_rss.discover,
     "ocpf": ocpf.discover,
+    "boston_public_notices": boston_public_notices.discover,
 }
 
 EXT_BY_CONTENT_TYPE = {

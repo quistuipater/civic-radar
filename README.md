@@ -14,12 +14,13 @@ saved to `/archive` first.
 brought to partial operational status for Boston, MA on 2026-07-10.** The
 engine (ingestion connectors, parsing, AI layer, dashboard, alerting) is
 generic and already works end-to-end against Ventura and, as of the same
-day, Santa Cruz (`../santa_cruz_civic_radar`). **3 real Boston sources are
+day, Santa Cruz (`../santa_cruz_civic_radar`). **4 real Boston sources are
 seeded and ingesting live**, verified against a real end-to-end run: City of
 Boston City Council agendas/minutes (Legistar), Boston Police Department
-crime incidents (ArcGIS), and Massachusetts OCPF campaign-finance filings
-for the Mayor and City Council. Two source categories remain open — see
-"Known gaps" below, both investigated and confirmed rather than unstarted.
+crime incidents (ArcGIS), Massachusetts OCPF campaign-finance filings for
+the Mayor and City Council, and Elections-department public notices. One
+source category remains open — see "Known gaps" below, investigated and
+confirmed rather than unstarted.
 
 **Massachusetts's civic-government structure differs from California's in
 ways that shaped this research** — Boston is a consolidated city/county
@@ -64,6 +65,19 @@ filing officers the way NetFile-based sources have served both prior forks.
   class of caveat as NetFile's rolling-window feeds elsewhere in this
   project). Live run: **1 new filing** (Mayor Wu's real, same-day deposit
   report).
+- **City of Boston Public Notices — Elections**
+  (`app/ingestion/connectors/boston_public_notices.py`, new connector,
+  also plugs into the existing generic `discover()`/`CONNECTORS` dispatch).
+  boston.gov's public-notices board (Drupal) lists every department's
+  notices on one page — filtered via its own `field_contact_target_id[]=551`
+  facet to Elections specifically, out of ~100 department ids the site
+  exposes. Each notice is its own individually-addressed HTML page
+  (`/public-notices/{id}`), not a linked PDF, so `generic.py`'s PDF harvester
+  finds nothing here; this connector treats each listing link as the
+  document itself and lets the generic archive/parse pipeline handle the
+  `text/html` content directly (no bespoke ingestion function needed). Low
+  volume by nature, not a sign of a broken connector. Live run: **1 new
+  notice** ("Board of Election Commissioners Meeting").
 
 **Generic engine (carried over from Ventura Civic Radar, unchanged):**
 - **Ingestion connectors**, reusable by any future source without new code:
@@ -152,19 +166,8 @@ filing officers the way NetFile-based sources have served both prior forks.
 
 ## Known gaps
 
-Both investigated and confirmed live 2026-07-10, not just unstarted:
+Investigated and confirmed live 2026-07-10, not just unstarted:
 
-- **Elections office notices/candidate filings.** `boston.gov/public-notices`
-  is real, live, and lists real individual notices — but each notice is its
-  own individually-addressed HTML detail page (`/public-notices/{id}`), not
-  a linked PDF/Word/CSV attachment, so `app/ingestion/connectors/generic.py`
-  (which only harvests links ending in `.pdf`/`.doc`/`.docx`/`.csv`) finds
-  nothing there. Needs a small bespoke connector that treats the listing
-  page's `/public-notices/{id}` links as the documents themselves (closer in
-  shape to a sitemap crawl than a document harvester) — not built yet, to
-  avoid piling a fourth new connector onto this pass. Massachusetts
-  Secretary of the Commonwealth's elections division is a second,
-  unexplored candidate source in this category.
 - **Meeting audio.** Boston's Granicus podcast feed
   (`boston.granicus.com/Podcast.php?view_id=1`) is genuinely populated with
   real, recent items (unlike Santa Cruz's empty one) — but the actual MP3
@@ -237,10 +240,11 @@ models depend on Postgres-only features (pgvector's `Vector`/
 `cosine_distance`, JSONB). Each test runs inside a transaction that's rolled
 back afterward for isolation.
 
-554 tests, ~99% coverage: 536 inherited from Ventura at fork time (including
-the NUL-byte parsing fix) plus 18 new for the two Boston-specific connectors
-(`tests/test_legistar.py`, `tests/test_connectors.py`'s `TestOcpfDiscover`),
-both at 100% coverage on the modules themselves. `AGENCY_CONFIG`-dependent
+561 tests, ~99% coverage: 536 inherited from Ventura at fork time (including
+the NUL-byte parsing fix) plus 25 new for the three Boston-specific
+connectors (`tests/test_legistar.py`, `tests/test_connectors.py`'s
+`TestOcpfDiscover` and `TestBostonPublicNoticesDiscover`), all at 100%
+coverage on the modules themselves. `AGENCY_CONFIG`-dependent
 crime-data tests and a couple of fixture defaults were updated to not
 assume a real Ventura agency/jurisdiction is configured (see
 `tests/test_crime_data.py`, `tests/conftest.py`) — the same adjustment

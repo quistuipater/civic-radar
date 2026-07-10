@@ -116,6 +116,33 @@ SOURCES: list[dict] = [
             "Boston -- see that module's docstring for why."
         ),
     ),
+    dict(
+        name="City of Boston Public Notices — Elections",
+        jurisdiction="City of Boston",
+        agency="Elections Department",
+        body=None,
+        source_type="notice_board",
+        authority_level="official_primary",
+        url="https://www.boston.gov/public-notices?field_contact_target_id%5B%5D=551",
+        fetch_method="html_pdf_harvest",
+        connector="boston_public_notices",
+        polling_interval_minutes=1440,
+        parser_type="boston_public_notices",
+        notes=(
+            "Confirmed live 2026-07-10: boston.gov's public-notices board "
+            "(Drupal), filtered via its own field_contact_target_id[]=551 "
+            "facet to Elections-department notices specifically (the "
+            "unfiltered listing spans ~100 city departments, well beyond "
+            "this project's scope). Each notice is its own individually-"
+            "addressed HTML page, not a linked PDF -- generic.py's PDF "
+            "harvester finds nothing here, so this uses a dedicated "
+            "connector (app/ingestion/connectors/boston_public_notices.py) "
+            "that treats each /public-notices/{id} link on the listing as "
+            "the document itself. Low volume by nature (1 live notice as "
+            "of first verification) -- that's expected, not a sign of a "
+            "broken connector."
+        ),
+    ),
 ]
 
 
