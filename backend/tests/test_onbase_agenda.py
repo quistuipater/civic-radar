@@ -234,6 +234,15 @@ class TestIngestOnbaseAgenda:
         docs = db.query(Document).filter(Document.source_id == source.id).all()
         doc_types = sorted(d.document_type for d in docs)
         assert doc_types == ["agenda", "minutes", "packet", "source_page_snapshot"]
+        # Titles must carry the body name -- many bodies meet on the same
+        # date, and a bare "Agenda — <date>" makes review-queue/digest rows
+        # indistinguishable.
+        titles = sorted(d.title for d in docs if d.document_type != "source_page_snapshot")
+        assert titles == [
+            "City Council — Minutes — 2026-01-13",
+            "Sister Cities — Agenda — 2026-07-14",
+            "Sister Cities — Packet — 2026-07-14",
+        ]
 
     def test_links_agenda_and_packet_to_the_same_meeting(self, db, archive_root, monkeypatch):
         source = make_source(

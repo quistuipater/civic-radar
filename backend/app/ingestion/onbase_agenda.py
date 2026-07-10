@@ -260,7 +260,7 @@ def ingest_onbase_agenda(db: Session, source: Source) -> int:
                 document = Document(
                     source_id=source.id,
                     fetch_id=fetch.id,
-                    title=f"{doc['document_type'].capitalize()} — {meeting_row['start_time'].date()}",
+                    title=f"{meeting_row['body']} — {doc['document_type'].capitalize()} — {meeting_row['start_time'].date()}",
                     document_type=doc["document_type"],
                     original_url=source.url,
                     archive_path=str(archive_path),
