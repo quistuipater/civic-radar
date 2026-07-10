@@ -109,6 +109,27 @@ class TestDiscover:
         found = discover(html, BASE_URL)
         assert len(found) == 1
 
+    def test_title_includes_doctype_and_date_to_disambiguate_recurring_meetings(self):
+        html = accordion_html(
+            [
+                (
+                    "City Council",
+                    "cat1",
+                    [
+                        ("/AgendaCenter/ViewFile/Agenda/_07072026-1", "July 07, 2026, Regular Meeting. Agenda"),
+                        ("/AgendaCenter/ViewFile/Agenda/_07142026-2", "July 14, 2026, Regular Meeting. Agenda"),
+                        ("/AgendaCenter/ViewFile/Minutes/_07072026-3", "July 07, 2026, Regular Meeting. Minutes"),
+                    ],
+                )
+            ]
+        )
+        titles = {d.title for d in discover(html, BASE_URL)}
+        assert titles == {
+            "Regular Meeting — Agenda — 2026-07-07",
+            "Regular Meeting — Agenda — 2026-07-14",
+            "Regular Meeting — Minutes — 2026-07-07",
+        }
+
     def test_malformed_label_falls_back_to_agenda_type_and_raw_label_as_title(self):
         html = accordion_html([("City Council", "cat1", [("/AgendaCenter/ViewFile/Agenda/_1", "Not a real label")])])
         found = discover(html, BASE_URL)
