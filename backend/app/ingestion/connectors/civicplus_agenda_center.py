@@ -49,10 +49,19 @@ def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -
             label = a["aria-label"]
             meeting_date, meeting_desc, doctype = _parse_label(label)
 
+            # One body can have dozens of same-named meetings; without the
+            # doctype and date in the title, review-queue and digest rows
+            # for them are indistinguishable.
+            title_parts = [meeting_desc or label]
+            if doctype:
+                title_parts.append(doctype)
+            if meeting_date:
+                title_parts.append(str(meeting_date))
+
             results[full_url] = DiscoveredDocument(
                 url=full_url,
                 document_type=doctype.lower() if doctype else "agenda",
-                title=meeting_desc or label,
+                title=" — ".join(title_parts),
                 meeting_date=meeting_date,
                 body=category_name,
                 meeting_type=meeting_desc,
