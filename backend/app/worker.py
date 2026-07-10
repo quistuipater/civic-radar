@@ -16,7 +16,9 @@ from app.config import settings
 from app.db import SessionLocal
 from app.ingestion.crime_data import ingest_crime_source
 from app.ingestion.meeting_audio import ingest_meeting_audio
+from app.ingestion.onbase_agenda import ingest_onbase_agenda
 from app.ingestion.pipeline import ingest_source
+from app.ingestion.scc_planning_search import ingest_scc_planning_search
 from app.issue_matching import match_document_to_issue
 from app.models import AiOutput, Document, Source
 from app.parsing.service import parse_document
@@ -47,6 +49,10 @@ def run_ingestion_tick() -> None:
                     ingest_crime_source(db, source)
                 elif source.fetch_method == "granicus_podcast_rss":
                     ingest_meeting_audio(db, source)
+                elif source.fetch_method == "onbase_agenda_online":
+                    ingest_onbase_agenda(db, source)
+                elif source.fetch_method == "scc_planning_search":
+                    ingest_scc_planning_search(db, source)
                 else:
                     ingest_source(db, source)
             except Exception:

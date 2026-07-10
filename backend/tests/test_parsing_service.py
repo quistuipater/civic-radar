@@ -112,6 +112,33 @@ class TestParseDocument:
         assert document.parser_status == "failed"
         assert len(document.parser_error) == 2000
 
+    def test_embedded_nul_bytes_are_stripped_before_chunks_are_stored(self, db, tmp_path, monkeypatch):
+        # Postgres TEXT columns reject \x00 outright (psycopg.DataError) --
+        # seen live on a real 900+ page Santa Cruz budget packet whose PDF
+        # extraction produced a NUL byte partway through. parse_file() is
+        # mocked here since reproducing that exact PDF-extraction artifact
+        # isn't practical in a unit test; what matters is that parse_document
+        # sanitizes whatever parse_file() hands back before it reaches the DB.
+        from app.parsing.extract import ParsedDocument, ParsedPage
+
+        document = make_document(db, archive_path=str(tmp_path / "doc.pdf"), parser_status="pending")
+        db.commit()
+
+        def fake_parse_file(path, mime_type):
+            return ParsedDocument(
+                full_text="Ordinance No. 2026-05\x00 was passed.",
+                pages=[ParsedPage(1, "Ordinance No. 2026-05\x00 was passed.")],
+            )
+
+        monkeypatch.setattr(service_module, "parse_file", fake_parse_file)
+
+        service_module.parse_document(db, document)  # would raise psycopg.DataError if unfixed
+
+        assert document.parser_status == "parsed"
+        chunks = db.query(DocumentChunk).filter_by(document_id=document.id).all()
+        assert "\x00" not in chunks[0].text
+        assert "\x00" not in open(document.extracted_text_path).read()
+
     def test_wall_clock_timeout_marks_document_failed_rather_than_hanging(self, db, tmp_path, monkeypatch):
         document = make_document(db, archive_path=str(tmp_path / "doc.txt"), parser_status="pending")
         db.commit()

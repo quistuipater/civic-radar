@@ -46,6 +46,16 @@ def parse_document(db: Session, document: Document) -> None:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous_handler)
 
+    # Postgres TEXT/VARCHAR columns reject embedded NUL bytes outright (a real
+    # DataError, not a warning) -- some PDFs (seen live in a 900+ page Santa
+    # Cruz budget packet) extract with stray \x00 bytes from the source
+    # encoding. Stripped here, once, before anything downstream (chunk rows,
+    # the .txt sidecar, structured-field regexes) can see them, rather than
+    # letting the failure surface deep inside a bulk chunk INSERT.
+    parsed.full_text = parsed.full_text.replace("\x00", "")
+    for page in parsed.pages:
+        page.text = page.text.replace("\x00", "")
+
     text_path = path.with_suffix(path.suffix + ".txt")
     text_path.write_text(parsed.full_text)
     document.extracted_text_path = str(text_path)
