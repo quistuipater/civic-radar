@@ -17,13 +17,22 @@ trusting any agency's `created_date`-shaped field as an incremental cursor,
 verify it actually varies per row and actually filters via `where` -- one of
 Ventura's two agencies had a field that looked like a per-record cursor but
 silently failed both checks (every row shared one bulk-load timestamp, and
-`where` filtering on it silently no-opped). No Boston agency has been added
-below yet -- Boston Police Department publishes a well-known open "Crime
-Incident Reports" dataset on Analyze Boston, but verify live whether it's
-actually ArcGIS-FeatureServer-shaped (what this module and
-arcgis_feature_service.py handle) or a different open-data platform
-(Socrata/CKAN) before assuming this connector applies as-is -- see this
-file's AGENCY_CONFIG and README's TODO section.
+`where` filtering on it silently no-opped).
+
+Boston PD's "Crime Incident Reports" (published on Analyze Boston, also
+mirrored to the BPD Crime Hub) verified live 2026-07-10: genuinely
+ArcGIS-FeatureServer-shaped, at
+https://services.arcgis.com/sFnw0xNflSi8J0uh/arcgis/rest/services/Boston_Incidents_View/FeatureServer/0
+(public, unauthenticated). `INC_NUM` looks like a natural incident id but is
+NOT unique -- a 2000-row live sample had only 1864 distinct values (Boston
+publishes one row per offense code, so a multi-offense incident gets
+multiple rows sharing one INC_NUM); using it as `external_id_field` would
+silently drop legitimate rows. The FeatureServer's own metadata already
+declares the real unique key (`"uniqueIdField": {"name": "OBJECTID"}`), so
+`OBJECTID` is used instead. `REPORT_DATE` was verified live to both vary
+per row and filter/order correctly via `where`/`orderByFields`, so it's a
+real incremental-sync cursor (unlike Ventura Sheriff's NIBRS layer, which
+looked similar but wasn't).
 """
 
 import logging
@@ -38,35 +47,28 @@ from app.models import CrimeIncident, Fetch, Source
 
 logger = logging.getLogger(__name__)
 
-# Keyed by Source.agency (exact string match). No Boston-area agency added
-# yet -- verify whether Boston PD's "Crime Incident Reports" open dataset
-# (published on Analyze Boston) is actually ArcGIS-FeatureServer-shaped
-# before assuming this module applies; if so, add an entry here matching
-# the pattern below. Example shape, generalized from Ventura Civic Radar's
-# real entries (field names below are illustrative, not real -- inspect the
-# actual FeatureServer's fields via its /query endpoint before filling this
-# in):
-#
-# AGENCY_CONFIG = {
-#     "Some Police Department": {
-#         "external_id_field": "GlobalID",  # or whatever the layer's unique id field is
-#         "created_date_field": None,  # only set this if it demonstrably varies per row
-#                                       # AND filters correctly via `where` -- verify both
-#                                       # before trusting it as an incremental cursor
-#         "incident_date_field": "Incident_Date_Start",
-#         "incident_date_end_field": "Incident_Date_End",
-#         "field_map": {
-#             "report_number": "Report_Number",
-#             "offense_category": "Offense_Category",
-#             "offense_type": "Offense_Type",
-#             "generalized_address": "GeneralizedAddress",
-#             "council_district": "Council_District",
-#             "beat": "Beat",
-#             "community_council": "Community_Council",
-#         },
-#     },
-# }
-AGENCY_CONFIG: dict = {}
+# Keyed by Source.agency (exact string match).
+AGENCY_CONFIG: dict = {
+    "Boston Police Department": {
+        "external_id_field": "OBJECTID",
+        "created_date_field": "REPORT_DATE",
+        "incident_date_field": "FROM_DATE",
+        "incident_date_end_field": "TO_DATE",
+        "field_map": {
+            "report_number": "INC_NUM",
+            "offense_category": "CRIME_CATEGORY",
+            "offense_type": "OFFENSE_DESC",
+            "generalized_address": "BLOCK",
+            # Boston's schema has no council-district-equivalent field;
+            # DISTRICT (BPD patrol district, e.g. "B2") is the closest
+            # analog to "beat", and NEIGHBORHOOD is the closest analog to
+            # "community_council" -- both are honest approximations, and
+            # raw_attributes preserves the real field names/values either way.
+            "beat": "DISTRICT",
+            "community_council": "NEIGHBORHOOD",
+        },
+    },
+}
 
 
 def _epoch_ms_to_datetime(ms: int | None) -> datetime | None:

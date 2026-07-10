@@ -149,10 +149,9 @@ class TestIngestCrimeSource:
 
 
 class TestIncrementalSyncCursor:
-    """AGENCY_CONFIG has no real agency configured yet in this scaffold, so
-    this code path isn't exercised by production config today. Verified here
-    via a hypothetical config entry, in case a future agency actually has a
-    usable cursor field.
+    """Boston PD's real config (REPORT_DATE) does exercise this path in
+    production, but this test uses its own hypothetical config so it stays
+    independent of whatever real agencies AGENCY_CONFIG happens to hold.
     """
 
     def test_cursor_is_computed_from_the_latest_ingested_incidents_created_at(self, db, archive_root, monkeypatch):

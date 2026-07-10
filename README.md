@@ -11,81 +11,85 @@ summarized or classified without the raw source material being hashed and
 saved to `/archive` first.
 
 **This repo is a fork of [Ventura Civic Radar](../ventura_civic_radar),
-scaffolded for Boston, MA but not yet pointed at any real Boston sources.**
-The engine below (ingestion connectors, parsing, AI layer, dashboard,
-alerting) is generic and already works end-to-end against Ventura and, as of
-2026-07-10, Santa Cruz (`../santa_cruz_civic_radar`) — what's missing here is
-Boston-specific *configuration*: real source URLs, agency names, and
-possibly new connector code if Boston's platforms turn out to differ from
-what's already been seen. See "TODO: Boston source research" below for
-exactly what's left, and the Santa Cruz fork for a worked example of what
-that research + build process looks like end to end (2 of its 6 source
-categories needed genuinely new connectors, the rest were pure
-configuration).
+brought to partial operational status for Boston, MA on 2026-07-10.** The
+engine (ingestion connectors, parsing, AI layer, dashboard, alerting) is
+generic and already works end-to-end against Ventura and, as of the same
+day, Santa Cruz (`../santa_cruz_civic_radar`). **3 real Boston sources are
+seeded and ingesting live**, verified against a real end-to-end run: City of
+Boston City Council agendas/minutes (Legistar), Boston Police Department
+crime incidents (ArcGIS), and Massachusetts OCPF campaign-finance filings
+for the Mayor and City Council. Two source categories remain open — see
+"Known gaps" below, both investigated and confirmed rather than unstarted.
 
 **Massachusetts's civic-government structure differs from California's in
-ways that matter for source research** — see the TODO section below before
-assuming the CA-shaped category boundaries (e.g. "county campaign finance vs.
-city campaign finance") translate directly. Boston is a consolidated
-city/county government (Suffolk County has had no independent elected county
-government since 1999), and campaign finance disclosure in Massachusetts is
-administered by the state's Office of Campaign and Political Finance (OCPF),
-not county-level filing officers the way NetFile-based sources have been in
-both prior forks.
+ways that shaped this research** — Boston is a consolidated city/county
+government (Suffolk County has had no independent elected county government
+since 1999), so there's no county-layer source category the way every CA
+fork has had one; and campaign finance disclosure runs through the state's
+Office of Campaign and Political Finance (OCPF) rather than county-level
+filing officers the way NetFile-based sources have served both prior forks.
 
-## What's implemented (generic engine, carried over from Ventura Civic Radar)
+## What's implemented
 
-- **Source registry**: `backend/scripts/seed_sources.py` currently seeds
-  **zero sources** — see the TODO section below. The `Source` model/registry
-  itself (jurisdiction, agency, fetch method, polling interval, authority
-  level) is unchanged from Ventura's and ready to receive real entries.
-- **Ingestion connectors** (all generic, not Ventura-specific — each just
-  needs a real URL/config to point at, though Boston may need new connector
-  code the way Santa Cruz's City of Santa Cruz agendas and County Planning
-  Commission sources did):
-  - `app/ingestion/connectors/civicplus_agenda_center.py` — works against
-    any CivicPlus AgendaCenter site (accordion-structured agenda/minutes
-    listing).
-  - `app/ingestion/connectors/primegov.py` — calls PrimeGov's open public
-    JSON API directly for any `*.primegov.com` portal (no headless browser
-    needed). Both Ventura County and Santa Cruz County use this platform for
-    their Boards of Supervisors — worth checking whether Boston City
-    Council does, though Boston more commonly appears (per public record,
-    not yet verified live for this fork) to use Granicus's own Legislative
-    Information Center rather than PrimeGov.
-  - `app/ingestion/connectors/netfile_rss.py` — reads NetFile's
-    unauthenticated RSS filing feed for a given agency code (Ventura
-    County's is `VCO`; Santa Cruz has both a county code `SCCO` and a
-    separate city code `CRUZ`). Massachusetts campaign-finance disclosure
-    goes through OCPF, not county/city NetFile portals — check OCPF's own
-    platform and API/RSS surface (if any) before assuming this connector
-    applies at all.
+**Real Boston sources (2026-07-10, verified via a real end-to-end ingestion run):**
+- **City of Boston City Council — Legistar** (`app/ingestion/legistar.py`,
+  new module). Legistar (Granicus's legislative management system), not
+  CivicPlus/PrimeGov — a real, documented, unauthenticated REST/OData API
+  (`webapi.legistar.com`), agenda/minutes PDFs are plain permanent URLs on
+  `boston.legistar1.com` with no session-state dance needed, simpler than
+  OnBase. Scoped to City Council (`BodyId=138`); Legistar also hosts every
+  other Boston body (Zoning Board of Appeal, School Committee, etc.) on the
+  same platform but those aren't seeded — School Committee specifically is
+  excluded per this project's Phase 1 school-board boundary. Live run:
+  **101 new agenda/minutes documents, 58 meetings**, correctly linked.
+- **Boston Police Department — Crime Incident Reports** (pure config, no new
+  code — `app/ingestion/crime_data.py`'s `AGENCY_CONFIG`). Genuinely
+  ArcGIS-FeatureServer-shaped, same platform as Ventura PD's feed. `OBJECTID`
+  (not the more natural-looking `INC_NUM`, which repeats across one
+  incident's multiple offense rows — verified live) is the identity field;
+  `REPORT_DATE` was verified as a real incremental-sync cursor. Live run (a
+  first full sync, since there was no prior cursor): **330,012 incidents**.
+- **Massachusetts OCPF — Boston Mayor & City Council Filings**
+  (`app/ingestion/connectors/ocpf.py`, new connector, but plugs into the
+  existing generic `discover()`/`CONNECTORS` dispatch — no bespoke
+  ingestion function needed, since OCPF's `/reports/log` is JSON, not HTML/
+  RSS, but still fits the same interface as `netfile_rss.py`). OCPF runs its
+  own real, documented REST API (`api.ocpf.us`, Swagger-published),
+  unauthenticated. Scoped via a `BOSTON_CPF_IDS` allowlist to the Mayor + 13
+  City Councilors specifically (from `GET /municipalities`), not every state
+  legislator/Sheriff/DA whose district happens to overlap Boston. Known
+  limitation: `/reports/log` only returns the ~50 most recent filings
+  statewide with no pagination/date-range params, so a Boston filing could
+  in principle be missed between polls if outpaced by other MA filings (same
+  class of caveat as NetFile's rolling-window feeds elsewhere in this
+  project). Live run: **1 new filing** (Mayor Wu's real, same-day deposit
+  report).
+
+**Generic engine (carried over from Ventura Civic Radar, unchanged):**
+- **Ingestion connectors**, reusable by any future source without new code:
+  - `app/ingestion/connectors/civicplus_agenda_center.py` — CivicPlus
+    AgendaCenter sites (accordion-structured agenda/minutes listing). Not
+    used by Boston's real sources above.
+  - `app/ingestion/connectors/primegov.py` — PrimeGov's open public JSON
+    API. Both Ventura County and Santa Cruz County use this for their
+    Boards of Supervisors; Boston uses Legistar instead (verified live).
+  - `app/ingestion/connectors/netfile_rss.py` — NetFile's unauthenticated
+    RSS filing feed, used by Ventura and Santa Cruz. Not applicable to
+    Massachusetts (see OCPF above).
   - `app/ingestion/connectors/generic.py` — generic HTML/PDF-link harvester,
-    a reasonable default for any page that isn't one of the above platforms.
+    fallback for any page that isn't one of the above platforms.
   - `app/ingestion/arcgis_feature_service.py` + `app/ingestion/crime_data.py`
-    — syncs any public, unauthenticated ArcGIS FeatureServer (common for
-    police-department open-data crime dashboards) into a dedicated
-    `crime_incidents` table. `AGENCY_CONFIG` in `crime_data.py` is currently
-    empty — see that file's docstring for the field-mapping pattern to
-    follow once a real FeatureServer is found. Boston Police Department
-    publishes a well-known "Crime Incident Reports" open dataset on Analyze
-    Boston — verify live whether it's actually ArcGIS-FeatureServer-shaped
-    (what this connector handles) or a different open-data platform
-    (Socrata/CKAN are both common for city-run open-data portals and would
-    need different connector code entirely).
+    — syncs any public, unauthenticated ArcGIS FeatureServer into a
+    dedicated `crime_incidents` table; now configured for Boston PD, see
+    above.
   - `app/ingestion/meeting_audio.py` + `whisperx_service/` — polls a
     Granicus podcast RSS feed for meeting audio and transcribes it with
-    speaker diarization via a standalone WhisperX service. Boston City
-    Council's meeting archive is commonly hosted on Granicus (verify live),
-    but Santa Cruz's experience is a caution here: its county Granicus
-    instance's podcast feed turned out to be unpopulated (zero items)
-    despite 200+ real video recordings existing, and its actual video
-    stream was CloudFront-gated — check whether Boston's podcast feed
-    actually has real enclosure items before assuming this connector works
-    as-is. See `whisperx_service/README.md` for what NOT to reuse from the
-    existing Ventura deployment if you do wire this in.
-  - Every fetch archives a raw page snapshot first, regardless of what else
-    it finds.
+    speaker diarization via a standalone WhisperX service. Boston's
+    Granicus podcast feed (`boston.granicus.com`) is genuinely populated
+    (unlike Santa Cruz's empty one) — but see "Known gaps" below for why
+    this isn't wired in.
+  - Every fetch archives a raw page/response snapshot first, regardless of
+    what else it finds.
 - **Parsing**: PDF (via `pdfplumber`) and HTML text extraction, page-level
   chunking, and regex-based structured field extraction (ordinance/resolution/
   project numbers, APNs, comment deadlines, public hearing dates). Pages with
@@ -146,55 +150,33 @@ both prior forks.
   Ventura's jurisdiction name, but most individual tests exercise generic
   logic and don't depend on the actual city name.
 
-## TODO: Boston source research
+## Known gaps
 
-Nothing below is wired in yet. This mirrors the categories Ventura Civic
-Radar (and, since, Santa Cruz Civic Radar) ended up with after their own
-source-discovery passes — use it as a checklist, not a guarantee any of
-these platforms are actually what Boston uses. Budget real time for this:
-Santa Cruz's pass found that only 2 of its 6 source categories were pure
-"seed the URL" wins — the rest needed genuinely new connector code because
-the real platform differed from what CivicPlus/PrimeGov/NetFile/ArcGIS
-already handle.
+Both investigated and confirmed live 2026-07-10, not just unstarted:
 
-- [ ] **City of Boston council/committee agendas** — identify the platform.
-      Boston City Council's meeting archive is commonly associated with
-      Granicus (which would also cover meeting audio/video, see below), but
-      verify live rather than trusting public record — Santa Cruz's own
-      county Planning Commission turned out to be on a completely different,
-      much older platform than its Board of Supervisors despite both being
-      county bodies, so don't assume consistency across Boston's own bodies
-      either.
-- [ ] **Local police open crime data** — Boston Police Department publishes
-      a well-known "Crime Incident Reports" dataset on Analyze Boston
-      (data.boston.gov or analyzeboston.com — verify current URL). Check
-      whether it's actually ArcGIS FeatureServer-shaped (what
-      `app/ingestion/crime_data.py` and `arcgis_feature_service.py` handle)
-      or a Socrata/CKAN-style open-data platform, which would need different
-      connector code entirely. If ArcGIS-shaped, add an `AGENCY_CONFIG`
-      entry — but verify any `created_date`-like field actually varies per
-      row and filters correctly via `where` before trusting it as an
-      incremental-sync cursor (Ventura's didn't; this was a real live bug).
-- [ ] **Campaign finance / disclosure filings** — Massachusetts uses OCPF
-      (Office of Campaign and Political Finance) at the state level, not
-      county filing officers. Identify OCPF's actual publishing platform and
-      whether it exposes an RSS/API surface before assuming
-      `netfile_rss.py` applies — it's NetFile-specific and won't work
-      against a different platform without real adaptation.
-- [ ] **Elections office** notices/candidate filings (Massachusetts
-      Secretary of the Commonwealth's elections division, and/or Boston's
-      own Election Department).
-- [ ] **Meeting audio/video** — check whether Boston City Council's Granicus
-      instance (if it uses one) actually has a *populated* podcast RSS feed
-      before assuming `app/ingestion/meeting_audio.py` works as-is — Santa
-      Cruz's county Granicus instance had 200+ real video recordings but a
-      completely empty podcast feed, and its video stream turned out to be
-      CloudFront-gated and not pursued. Decide whether to point at the
-      existing Ventura WhisperX deployment or stand up a separate one (see
-      `whisperx_service/README.md` for what not to collide with).
-- [ ] Revisit `prd.md` for anything written specifically around Ventura's
-      geography/agencies that should be generalized or re-scoped for Boston
-      before treating it as the authoritative spec for this fork.
+- **Elections office notices/candidate filings.** `boston.gov/public-notices`
+  is real, live, and lists real individual notices — but each notice is its
+  own individually-addressed HTML detail page (`/public-notices/{id}`), not
+  a linked PDF/Word/CSV attachment, so `app/ingestion/connectors/generic.py`
+  (which only harvests links ending in `.pdf`/`.doc`/`.docx`/`.csv`) finds
+  nothing there. Needs a small bespoke connector that treats the listing
+  page's `/public-notices/{id}` links as the documents themselves (closer in
+  shape to a sitemap crawl than a document harvester) — not built yet, to
+  avoid piling a fourth new connector onto this pass. Massachusetts
+  Secretary of the Commonwealth's elections division is a second,
+  unexplored candidate source in this category.
+- **Meeting audio.** Boston's Granicus podcast feed
+  (`boston.granicus.com/Podcast.php?view_id=1`) is genuinely populated with
+  real, recent items (unlike Santa Cruz's empty one) — but the actual MP3
+  enclosure URLs (`archive-video.granicus.com`) are CloudFront-gated and
+  return 403 even with a matching `Referer` header, the same access-
+  controlled dead end Ventura and Santa Cruz both hit on their video
+  streams. Confirmed, not pursued further, consistent with this project's
+  standing policy against bypassing access controls.
+
+Revisit `prd.md` for anything written specifically around Ventura's
+geography/agencies that should be generalized or re-scoped for Boston before
+treating it as the authoritative spec for this fork.
 
 ## Running it
 
@@ -215,10 +197,9 @@ change it).
 API docs: http://localhost:8013/docs
 
 The worker starts fetching immediately (any source with `last_fetched_at IS
-NULL` is due right away) and re-polls per `polling_interval_minutes`. Watch it
-with `docker compose logs -f worker`. With zero sources seeded, there's
-nothing for it to do yet — that's expected until the TODO list above is
-worked through.
+NULL` is due right away) and re-polls per `polling_interval_minutes`. Watch
+it with `docker compose logs -f worker` — with the 3 real sources above
+seeded, it has real work to do from the first tick.
 
 ### Local AI (optional but recommended)
 
@@ -256,9 +237,11 @@ models depend on Postgres-only features (pgvector's `Vector`/
 `cosine_distance`, JSONB). Each test runs inside a transaction that's rolled
 back afterward for isolation.
 
-This is the same test suite Ventura Civic Radar had at fork time (536 tests,
-~99% coverage, including the NUL-byte parsing fix), with `AGENCY_CONFIG`-
-dependent crime-data tests and a couple of fixture defaults updated to not
+554 tests, ~99% coverage: 536 inherited from Ventura at fork time (including
+the NUL-byte parsing fix) plus 18 new for the two Boston-specific connectors
+(`tests/test_legistar.py`, `tests/test_connectors.py`'s `TestOcpfDiscover`),
+both at 100% coverage on the modules themselves. `AGENCY_CONFIG`-dependent
+crime-data tests and a couple of fixture defaults were updated to not
 assume a real Ventura agency/jurisdiction is configured (see
 `tests/test_crime_data.py`, `tests/conftest.py`) — the same adjustment
 already made for Santa Cruz's fork, copied directly since the underlying

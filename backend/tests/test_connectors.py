@@ -4,7 +4,9 @@ source's page structure changes, so they're the highest-value place to catch
 a regression before it ships.
 """
 
-from app.ingestion.connectors import generic, netfile_rss
+import json
+
+from app.ingestion.connectors import generic, netfile_rss, ocpf
 
 
 class TestGenericDiscover:
@@ -89,3 +91,47 @@ class TestNetfileRssDiscover:
 
     def test_returns_empty_list_on_malformed_xml_instead_of_raising(self):
         assert netfile_rss.discover(b"<not><valid", "https://netfile.com/feed.xml") == []
+
+
+class TestOcpfDiscover:
+    BOSTON_CPF_ID = next(iter(ocpf.BOSTON_CPF_IDS))
+
+    def _report(self, **overrides):
+        report = {
+            "cpfId": self.BOSTON_CPF_ID,
+            "reportId": 1033109,
+            "reportTypeDescription": "Deposit Report",
+            "reportingPeriod": "7/6/26",
+            "dateFiled": "Fri, 7/10/2026 1:04 PM",
+            "fullNameReverse": "Wu, Michelle",
+        }
+        report.update(overrides)
+        return report
+
+    def test_keeps_only_boston_scoped_filers(self):
+        body = json.dumps([self._report(), self._report(cpfId=999999, reportId=1)]).encode()
+        found = ocpf.discover(body, "https://api.ocpf.us/reports/log")
+        assert len(found) == 1
+        assert found[0].url == "https://api.ocpf.us/report/pdf/1033109"
+        assert found[0].document_type == "notice"
+        assert found[0].title == "Wu, Michelle — Deposit Report (7/6/26)"
+
+    def test_title_omits_period_when_missing(self):
+        body = json.dumps([self._report(reportingPeriod=None)]).encode()
+        found = ocpf.discover(body, "https://api.ocpf.us/reports/log")
+        assert found[0].title == "Wu, Michelle — Deposit Report"
+
+    def test_falls_back_to_default_filer_name_when_missing(self):
+        body = json.dumps([self._report(fullNameReverse=None)]).encode()
+        found = ocpf.discover(body, "https://api.ocpf.us/reports/log")
+        assert found[0].title.startswith("Unknown filer")
+
+    def test_skips_reports_with_no_report_id(self):
+        body = json.dumps([self._report(reportId=None)]).encode()
+        assert ocpf.discover(body, "https://api.ocpf.us/reports/log") == []
+
+    def test_returns_empty_list_on_malformed_json_instead_of_raising(self):
+        assert ocpf.discover(b"{not valid json", "https://api.ocpf.us/reports/log") == []
+
+    def test_returns_empty_list_when_body_is_not_a_json_list(self):
+        assert ocpf.discover(b'{"error": "nope"}', "https://api.ocpf.us/reports/log") == []
