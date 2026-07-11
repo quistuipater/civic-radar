@@ -143,6 +143,20 @@ class TestBuildDailyDigestNeedsReview:
         digest = build_daily_digest(db)
         assert digest["needs_review"] == []
 
+    def test_excludes_already_reviewed_classifications(self, db):
+        document = make_document(db)
+        make_ai_output(
+            db,
+            document.id,
+            task_type="classification",
+            output_json={"human_review_required": True},
+            reviewed=True,
+            created_at=hours_ago(1),
+        )
+        db.commit()
+        digest = build_daily_digest(db)
+        assert digest["needs_review"] == []
+
 
 class TestBuildDailyDigestApproachingDeadlines:
     def test_includes_deadline_within_14_days(self, db):

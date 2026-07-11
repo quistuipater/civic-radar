@@ -97,6 +97,8 @@ def get_document_ai_outputs(document_id: uuid.UUID, db: Session = Depends(get_db
             "output_json": o.output_json,
             "confidence": o.confidence,
             "error_message": o.error_message,
+            "reviewed": o.reviewed,
+            "operator_note": o.operator_note,
             "created_at": o.created_at,
         }
         for o in outputs

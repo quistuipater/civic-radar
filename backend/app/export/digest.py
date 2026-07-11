@@ -72,6 +72,7 @@ def build_daily_digest(db: Session, window_hours: int = DEFAULT_WINDOW_HOURS) ->
             AiOutput.created_at >= since,
             AiOutput.task_type == "classification",
             AiOutput.output_json["human_review_required"].astext == "true",
+            AiOutput.reviewed.is_(False),
         )
         .order_by(AiOutput.created_at.desc())
         .limit(SECTION_LIMIT)

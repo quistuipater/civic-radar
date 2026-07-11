@@ -347,6 +347,22 @@ def classify_document_form(document_id: uuid.UUID, db: Session = Depends(get_db)
     return RedirectResponse(url=f"/documents/{document_id}", status_code=303)
 
 
+@router.post("/documents/{document_id}/ai-outputs/{output_id}/acknowledge")
+def acknowledge_ai_output_form(
+    document_id: uuid.UUID,
+    output_id: uuid.UUID,
+    operator_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    output = db.get(AiOutput, output_id)
+    if output and output.input_ref_id == document_id:
+        output.reviewed = True
+        if operator_note:
+            output.operator_note = operator_note
+        db.commit()
+    return RedirectResponse(url=f"/documents/{document_id}", status_code=303)
+
+
 @router.post("/documents/{document_id}/attach-issue")
 def attach_issue_form(document_id: uuid.UUID, issue_id: uuid.UUID = Form(...), db: Session = Depends(get_db)):
     existing = (

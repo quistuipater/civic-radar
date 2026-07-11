@@ -424,6 +424,90 @@ class TestDocumentDetailPage:
         assert "Findable Document" in resp.text
         assert "Related Issue" in resp.text
 
+    def test_shows_acknowledge_action_for_unreviewed_flagged_output(self, db, client):
+        document = make_document(db)
+        make_ai_output(db, document.id, output_json={"human_review_required": True})
+        db.commit()
+
+        resp = client.get(f"/documents/{document.id}")
+
+        assert resp.status_code == 200
+        assert "needs review" in resp.text
+        assert "Mark reviewed" in resp.text
+
+    def test_shows_reviewed_status_instead_of_action_once_acknowledged(self, db, client):
+        document = make_document(db)
+        make_ai_output(
+            db,
+            document.id,
+            output_json={"human_review_required": True},
+            reviewed=True,
+            operator_note="looks fine",
+        )
+        db.commit()
+
+        resp = client.get(f"/documents/{document.id}")
+
+        assert resp.status_code == 200
+        assert "Mark reviewed" not in resp.text
+        assert "Reviewed" in resp.text
+        assert "looks fine" in resp.text
+
+    def test_no_review_action_for_output_not_flagged(self, db, client):
+        document = make_document(db)
+        make_ai_output(db, document.id, output_json={"human_review_required": False})
+        db.commit()
+
+        resp = client.get(f"/documents/{document.id}")
+
+        assert resp.status_code == 200
+        assert "needs review" not in resp.text
+        assert "Mark reviewed" not in resp.text
+
+
+class TestAcknowledgeAiOutputForm:
+    def test_marks_output_reviewed_and_redirects(self, db, client):
+        document = make_document(db)
+        output = make_ai_output(db, document.id, output_json={"human_review_required": True})
+        db.commit()
+
+        resp = client.post(
+            f"/documents/{document.id}/ai-outputs/{output.id}/acknowledge",
+            data={"operator_note": "checked against agenda"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == f"/documents/{document.id}"
+        db.refresh(output)
+        assert output.reviewed is True
+        assert output.operator_note == "checked against agenda"
+
+    def test_unknown_output_still_redirects_without_error(self, db, client):
+        document = make_document(db)
+        db.commit()
+
+        resp = client.post(
+            f"/documents/{document.id}/ai-outputs/00000000-0000-0000-0000-000000000000/acknowledge",
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+
+    def test_output_belonging_to_a_different_document_is_not_acknowledged(self, db, client):
+        document = make_document(db)
+        other_document = make_document(db)
+        output = make_ai_output(db, other_document.id, output_json={"human_review_required": True})
+        db.commit()
+
+        resp = client.post(
+            f"/documents/{document.id}/ai-outputs/{output.id}/acknowledge", follow_redirects=False
+        )
+
+        assert resp.status_code == 303
+        db.refresh(output)
+        assert output.reviewed is False
+
 
 class TestClassifyDocumentForm:
     def test_triggers_classification_and_redirects(self, db, client):

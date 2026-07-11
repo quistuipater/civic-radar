@@ -19,7 +19,7 @@
 <h2>AI outputs</h2>
 {% if ai_outputs %}
 <table>
-  <tr><th>Task</th><th>Model</th><th>Confidence</th><th>Output</th></tr>
+  <tr><th>Task</th><th>Model</th><th>Confidence</th><th>Output</th><th></th></tr>
   {% for o in ai_outputs %}
   <tr>
     <td>{{ o.task_type }}</td>
@@ -35,13 +35,25 @@
         </ul>
       {% endif %}
     </td>
+    <td>
+      {% if o.output_json and o.output_json.get('human_review_required') %}
+        {% if o.reviewed %}
+          <span class="muted">Reviewed{% if o.operator_note %}: {{ o.operator_note }}{% endif %}</span>
+        {% else %}
+          <span class="badge level-3">needs review</span>
+          <form method="post" action="/documents/{{ document.id }}/ai-outputs/{{ o.id }}/acknowledge">
+            <button type="submit">Mark reviewed</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
 {% else %}
 <p class="empty">No AI outputs yet.</p>
-<form method="post" action="/documents/{{ document.id }}/classify"><button type="submit">Run classification now</button></form>
 {% endif %}
+<form method="post" action="/documents/{{ document.id }}/classify"><button type="submit">{{ 'Re-run' if ai_outputs else 'Run' }} classification now</button></form>
 
 <h2>Linked issues</h2>
 {% if issue_links %}
