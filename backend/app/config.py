@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     archive_root: str = "/archive"
 
     ollama_base_url: str = "http://ollama:11434"
-    ollama_triage_model: str = "llama3.1:8b"
+    ollama_triage_model: str = "qwen3:8b"
     ollama_analysis_model: str = "llama3.1:8b"
     ollama_embedding_model: str = "nomic-embed-text"
 
