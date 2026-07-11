@@ -6,12 +6,11 @@
 <h2>High-priority alerts</h2>
 {% if data.high_priority_alerts %}
 <table>
-  <tr><th>Level</th><th>Title</th><th>Trigger</th><th></th></tr>
+  <tr><th>Level</th><th>Title / Trigger</th><th></th></tr>
   {% for a in data.high_priority_alerts %}
   <tr>
     <td><span class="badge level-{{ a.alert_level }}">L{{ a.alert_level }}</span></td>
-    <td>{{ a.title }}</td>
-    <td class="muted">{{ a.trigger_reason }}</td>
+    <td>{{ a.title }}<br><span class="muted">{{ a.trigger_reason }}</span></td>
     <td>
       <form class="inline" method="post" action="/review/{{ a.id }}/approve"><button type="submit">Approve</button></form>
       <form class="inline" method="post" action="/review/{{ a.id }}/reject"><button type="submit" class="secondary">Reject</button></form>
