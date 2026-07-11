@@ -76,10 +76,21 @@ saved to `/archive` first.
   likely an MXFP4 quantization/kernel issue, not a prompt problem, since even
   a trivial "return this exact JSON" prompt came back as nonsense. Every
   classification/summarization silently fell back to heuristics/errors as a
-  result until this was caught. `OLLAMA_TRIAGE_MODEL`/`OLLAMA_ANALYSIS_MODEL`
-  both use `llama3.1:8b` now (confirmed clean output on the same server) —
-  swap `gpt-oss:20b` back in only after separately confirming it produces
-  coherent output on whatever Ollama instance you're pointed at.
+  result until this was caught. Both roles moved to `llama3.1:8b` at that
+  point (confirmed clean output on the same server) — swap `gpt-oss:20b` back
+  in only after separately confirming it produces coherent output on whatever
+  Ollama instance you're pointed at. **`OLLAMA_TRIAGE_MODEL` update
+  (2026-07-11)**: `llama3.1:8b`'s classification prompt was setting
+  `human_review_required=true` on 60-80% of documents — measured against real
+  flagged docs and cross-checked against Claude Haiku 4.5, this turned out to
+  be miscalibration (the model hedging on routine, unambiguous filings) rather
+  than genuine uncertainty, and it also didn't reproduce its own flags
+  reliably on rerun (~60% self-agreement). `OLLAMA_TRIAGE_MODEL` (classification
+  + agenda item extraction) is now `qwen3:8b`: ~7-8% flag rate on the same
+  kind of sample, 100% valid structured JSON across 60 test calls, and 96.6%
+  run-to-run agreement, at no cost. `OLLAMA_ANALYSIS_MODEL` (summarization)
+  is still `llama3.1:8b` — `qwen3:8b` hasn't been evaluated against that
+  prompt.
 - **Agenda-item extraction**: `app/ai/agenda_items.py` splits an `agenda`
   document's text into individual `agenda_items` rows (item number, title,
   department, action type, consent/hearing/vote flags) via the triage model,
@@ -356,6 +367,7 @@ with `docker compose logs -f worker`.
 
 ```bash
 docker compose up -d ollama
+docker compose exec ollama ollama pull qwen3:8b
 docker compose exec ollama ollama pull llama3.1:8b
 docker compose exec ollama ollama pull nomic-embed-text
 ```
