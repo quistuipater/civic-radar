@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app import dashboard
+from app.config import settings
 from app.routers import (
     alerts,
     crime_incidents,
@@ -27,6 +29,8 @@ app.include_router(manual_submissions.router)
 app.include_router(digest.router)
 app.include_router(crime_incidents.router)
 app.include_router(dashboard.router)
+
+app.mount("/archive", StaticFiles(directory=settings.archive_root), name="archive")
 
 
 @app.get("/healthz")

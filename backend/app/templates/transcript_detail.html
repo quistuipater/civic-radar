@@ -12,7 +12,7 @@
   <p><strong>Language:</strong> {{ transcript.language or 'unknown' }}</p>
   <p><strong>Model:</strong> {{ transcript.model_name }}</p>
   <p><strong>Original URL:</strong> {% if transcript.original_url %}<a class="link" href="{{ transcript.original_url }}" target="_blank">{{ transcript.original_url }}</a>{% else %}—{% endif %}</p>
-  <p><strong>Local archive path:</strong> <code>{{ transcript.archive_path }}</code></p>
+  <p><strong>Local archive path:</strong> <a class="link" href="{{ transcript.archive_path }}" target="_blank">{{ transcript.archive_path }}</a></p>
 </div>
 
 <h2>Transcript</h2>

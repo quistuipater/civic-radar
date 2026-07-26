@@ -67,5 +67,14 @@
     {% block content %}{% endblock %}
   </main>
   <footer>Local-first civic intelligence — archive first, interpret second, publish third.</footer>
+  <script>
+    document.addEventListener('submit', function (e) {
+      var btn = e.target.querySelector('button[type="submit"], button:not([type])');
+      if (btn && !btn.disabled) {
+        btn.textContent = 'Working…';
+        btn.disabled = true;
+      }
+    });
+  </script>
 </body>
 </html>

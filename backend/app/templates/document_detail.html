@@ -6,7 +6,7 @@
 
 <div class="panel">
   <p><strong>Original URL:</strong> {% if document.original_url %}<a class="link" href="{{ document.original_url }}" target="_blank">{{ document.original_url }}</a>{% else %}—{% endif %}</p>
-  <p><strong>Local archive path:</strong> <code>{{ document.archive_path }}</code></p>
+  <p><strong>Local archive path:</strong> <a class="link" href="{{ document.archive_path }}" target="_blank">{{ document.archive_path }}</a></p>
   <p><strong>Parser status:</strong> {{ document.parser_status }}{% if document.parser_error %} — <span class="muted">{{ document.parser_error }}</span>{% endif %}</p>
   <p><strong>Identifiers:</strong>
     {% if document.project_number %}Project {{ document.project_number }} {% endif %}

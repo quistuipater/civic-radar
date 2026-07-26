@@ -102,7 +102,12 @@ data, county meeting audio).
   document+level.
 - **Dashboard**: server-rendered (Jinja2, no build step) — home, review
   queue, sources, issues, meeting/document/transcript detail, manual
-  submission form.
+  submission form. Action buttons (Run classification, Attach, Approve/Reject,
+  Create issue, Submit) show "Working…" and disable on click via a small
+  global script in `base.html`. Local archive paths on document/transcript
+  detail pages are clickable — `/archive` is mounted as a static file route
+  (`app/main.py`) serving directly from `settings.archive_root`, so the
+  archived file opens in a new tab.
 - **REST API**: FastAPI, routes per `prd.md` section 17.
 - **Test suite**: pytest — see "Running tests" below for current counts.
   Fixture defaults (`tests/conftest.py`) use "City of Santa Cruz" rather
