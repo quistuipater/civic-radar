@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.title }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>{{ issue.title }}</h1>
+<p class="muted">{{ issue.jurisdiction or '' }} — status: {{ issue.status }} — review: {{ issue.review_status }} — publication: {{ issue.publication_status }}</p>
+
+<div class="grid">
+  <div class="panel"><div class="stat">{{ issue.importance_score }}</div><div class="stat-label">Importance</div></div>
+  <div class="panel"><div class="stat">{{ issue.urgency_score }}</div><div class="stat-label">Urgency</div></div>
+  <div class="panel"><div class="stat">{{ issue.transparency_risk_score }}</div><div class="stat-label">Transparency Risk</div></div>
+  <div class="panel"><div class="stat">{{ issue.controversy_score }}</div><div class="stat-label">Controversy</div></div>
+</div>
+
+<h2>Summary</h2>
+<p>{{ issue.summary or 'No summary recorded yet.' }}</p>
+
+<h2>Timeline</h2>
+{% if events %}
+<table>
+  <tr><th>Date</th><th>Type</th><th>Title</th><th>Confidence</th></tr>
+  {% for e in events %}
+  <tr><td>{{ e.event_date.date() if e.event_date else '—' }}</td><td class="muted">{{ e.event_type }}</td><td>{{ e.title }}</td><td class="muted">{{ e.confidence or '' }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No issue events recorded yet.</p>
+{% endif %}
+
+<h2>Linked documents</h2>
+{% if links %}
+<table>
+  <tr><th>Document</th><th>Match type</th><th>Confidence</th></tr>
+  {% for link, doc in links %}
+  <tr><td><a class="link" href="/documents/{{ doc.id }}">{{ doc.title or doc.document_type }}</a></td><td class="muted">{{ link.relationship_type }}</td><td class="muted">{{ link.confidence }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No documents linked yet. Attach one from a document's detail page.</p>
+{% endif %}
+
+<h2>Export</h2>
+<p><a class="link" href="/issues/{{ issue.id }}/brief.md">Download Markdown issue brief</a></p>
+{% endblock %}

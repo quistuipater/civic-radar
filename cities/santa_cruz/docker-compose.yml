@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-santa_cruz_civic_radar}
+      POSTGRES_USER: ${POSTGRES_USER:-civic_radar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civic_radar_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Offset from Ventura Civic Radar's 5432 so both stacks can run on the same host at once.
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-civic_radar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      # Offset from Ventura Civic Radar's 11434. Consider pointing both
+      # projects' OLLAMA_BASE_URL at one shared Ollama instance instead of
+      # running two, to avoid duplicating multi-GB model downloads.
+      - "11435:11434"
+    # Uncomment on a host with an NVIDIA GPU + nvidia-container-toolkit (e.g. madhatter):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    build: ../../core
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://civic_radar:civic_radar_dev_password@postgres:5432/santa_cruz_civic_radar}
+      PROJECT_NAME: Santa Cruz Civic Radar
+      HTTP_USER_AGENT: SantaCruzCivicRadar/0.1 (+local civic monitoring)
+      OLLAMA_TRIAGE_MODEL: llama3.1:8b
+    volumes:
+      - ./archive:/archive
+      - ../../core:/app
+      # No real crime-data source was found for Santa Cruz (see README's
+      # "Known gaps") -- app/city_config.py's empty default already matches,
+      # so no bind-mount override needed here, unlike Ventura/Boston.
+      - ./seed_sources.py:/app/scripts/seed_sources.py
+      # Mounted as a fresh subdirectory (not individual files) so it nests
+      # under /app/tests and inherits core/tests/conftest.py's fixtures --
+      # Docker Desktop's virtiofs bind mounts can't overlay a single file
+      # onto a path that doesn't already exist in the outer ../../core:/app
+      # mount, but a new subdirectory works fine.
+      - ./tests:/app/tests/city
+    ports:
+      # 8011 was already taken by an unrelated container (imap-extractor) on
+      # this shared host; 8012 was free at the time this was set up.
+      - "8012:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ../../core
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://civic_radar:civic_radar_dev_password@postgres:5432/santa_cruz_civic_radar}
+      PROJECT_NAME: Santa Cruz Civic Radar
+      HTTP_USER_AGENT: SantaCruzCivicRadar/0.1 (+local civic monitoring)
+      OLLAMA_TRIAGE_MODEL: llama3.1:8b
+    volumes:
+      - ./archive:/archive
+      - ../../core:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python -m app.worker
+
+volumes:
+  postgres_data:
+  ollama_data:

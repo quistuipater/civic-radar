@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ transcript.title or 'Meeting Transcript' }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>{{ transcript.title or '(untitled recording)' }}</h1>
+<p class="muted">
+  {% if meeting %}<a class="link" href="/meetings/{{ meeting.id }}">{{ meeting.body }} — {{ meeting.start_time.strftime('%Y-%m-%d') if meeting.start_time else 'date unknown' }}</a>{% else %}not linked to a specific meeting{% endif %}
+</p>
+
+<div class="panel">
+  <p><strong>Duration:</strong> {{ '%d:%02d'|format((transcript.duration_seconds // 60)|int, (transcript.duration_seconds % 60)|int) if transcript.duration_seconds else 'unknown' }}</p>
+  <p><strong>Speakers:</strong> {{ transcript.speaker_count or 'unknown' }} distinct speaker labels (diarized automatically — not identified by name)</p>
+  <p><strong>Language:</strong> {{ transcript.language or 'unknown' }}</p>
+  <p><strong>Model:</strong> {{ transcript.model_name }}</p>
+  <p><strong>Original URL:</strong> {% if transcript.original_url %}<a class="link" href="{{ transcript.original_url }}" target="_blank">{{ transcript.original_url }}</a>{% else %}—{% endif %}</p>
+  <p><strong>Local archive path:</strong> <a class="link" href="{{ transcript.archive_path }}" target="_blank">{{ transcript.archive_path }}</a></p>
+</div>
+
+<h2>Transcript</h2>
+<p class="muted">Automated transcription and speaker diarization — an unreviewed raw artifact, not a human-verified record. Speaker labels (SPEAKER_00, etc.) are consistent within this recording only and are not tied to specific individuals.</p>
+{% if transcript.segments %}
+<div class="panel" style="max-height:70vh;overflow-y:auto;">
+  {% for seg in transcript.segments %}
+  <p style="margin:0.5rem 0;">
+    <span class="muted">[{{ '%d:%02d'|format((seg.start // 60)|int, (seg.start % 60)|int) }}]</span>
+    <strong>{{ seg.speaker or 'unknown speaker' }}:</strong>
+    {{ seg.text }}
+  </p>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">No segments recorded.</p>
+{% endif %}
+{% endblock %}
