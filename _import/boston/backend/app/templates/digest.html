@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Daily Digest — Boston Civic Radar{% endblock %}
+{% block content %}
+<h1>Daily Digest — {{ digest.generated_at.strftime('%Y-%m-%d') }}</h1>
+<p class="muted">
+  Internal draft, covering the last {{ digest.window_hours }}h. Not for public use.
+  <a class="link" href="/api/digest/daily.md?window_hours={{ digest.window_hours }}">Markdown export</a>
+</p>
+
+<h2>Top Changes</h2>
+{% if digest.top_changes %}
+<table>
+  <tr><th>Level</th><th>Title</th><th>Why</th></tr>
+  {% for alert in digest.top_changes %}
+  <tr>
+    <td><span class="badge level-{{ alert.alert_level }}">L{{ alert.alert_level }}</span></td>
+    <td>
+      {% if alert.document_id %}<a class="link" href="/documents/{{ alert.document_id }}">{{ alert.title }}</a>
+      {% elif alert.issue_id %}<a class="link" href="/issues/{{ alert.issue_id }}">{{ alert.title }}</a>
+      {% else %}{{ alert.title }}{% endif %}
+    </td>
+    <td class="muted">{{ alert.trigger_reason or alert.summary or '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No level 3+ alerts in this window.</p>
+{% endif %}
+
+<h2>Upcoming Hearings and Votes</h2>
+{% if digest.upcoming_hearings %}
+<table>
+  <tr><th>Date</th><th>Kind</th><th>Body</th><th>Item</th></tr>
+  {% for item, meeting in digest.upcoming_hearings %}
+  <tr>
+    <td>{{ meeting.start_time.strftime('%Y-%m-%d') if meeting.start_time else 'unknown' }}</td>
+    <td class="muted">{{ 'hearing' if item.public_hearing else 'vote' }}</td>
+    <td class="muted">{{ meeting.body }}</td>
+    <td><a class="link" href="/agenda-items/{{ item.id }}">{{ item.title }}</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">None scheduled in the next 14 days.</p>
+{% endif %}
+
+<h2>New Public Notices</h2>
+{% if digest.new_notices %}
+<ul>
+{% for doc in digest.new_notices %}
+  <li><a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">None in this window.</p>
+{% endif %}
+
+<h2>New Campaign/Election Items</h2>
+{% if digest.new_campaign_items %}
+<ul>
+{% for doc in digest.new_campaign_items %}
+  <li><a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">None in this window.</p>
+{% endif %}
+
+<h2>Items Needing Human Review</h2>
+{% if digest.needs_review %}
+<ul>
+{% for output, doc in digest.needs_review %}
+  <li><a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">None flagged in this window.</p>
+{% endif %}
+
+<h2>Items With Approaching Deadlines</h2>
+{% if digest.approaching_deadlines %}
+<ul>
+{% for doc, deadline_date, kind in digest.approaching_deadlines %}
+  <li>{{ deadline_date }} ({{ kind }}): <a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">None in this window.</p>
+{% endif %}
+
+<h2>Low-Confidence or Unverified Claims</h2>
+{% if digest.low_confidence or digest.unverified_submissions %}
+<ul>
+{% for output, doc in digest.low_confidence %}
+  <li class="muted">(low-confidence classification) <a class="link" href="/documents/{{ doc.id }}">{{ doc.title or '(untitled)' }}</a></li>
+{% endfor %}
+{% for sub in digest.unverified_submissions %}
+  <li class="muted">(unverified submission) {{ sub.claimed_source or 'unknown source' }}: {{ (sub.content_text or '')[:120] }}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">None in this window.</p>
+{% endif %}
+{% endblock %}

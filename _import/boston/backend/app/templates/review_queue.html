@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Review Queue — Boston Civic Radar{% endblock %}
+{% block content %}
+<h1>Review Queue</h1>
+
+<h2>High-priority alerts</h2>
+{% if data.high_priority_alerts %}
+<table>
+  <tr><th>Level</th><th>Title / Trigger</th><th></th></tr>
+  {% for a in data.high_priority_alerts %}
+  <tr>
+    <td><span class="badge level-{{ a.alert_level }}">L{{ a.alert_level }}</span></td>
+    <td>{{ a.title }}<br><span class="muted">{{ a.trigger_reason }}</span></td>
+    <td>
+      <form class="inline" method="post" action="/review/{{ a.id }}/approve"><button type="submit">Approve</button></form>
+      <form class="inline" method="post" action="/review/{{ a.id }}/reject"><button type="submit" class="secondary">Reject</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="empty">Nothing pending.</p>{% endif %}
+
+<h2>Extraction errors</h2>
+{% if data.extraction_errors %}
+<table>
+  <tr><th>Document</th><th>Error</th></tr>
+  {% for d in data.extraction_errors %}
+  <tr><td><a class="link" href="/documents/{{ d.id }}">{{ d.title or d.archive_path }}</a></td><td class="muted">{{ d.parser_error }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="empty">No parser failures.</p>{% endif %}
+
+<h2>Source failures</h2>
+{% if data.source_failures %}
+<table>
+  <tr><th>Source</th><th>Consecutive failures</th><th>Last error</th></tr>
+  {% for s in data.source_failures %}
+  <tr><td>{{ s.name }}</td><td>{{ s.consecutive_failures }}</td><td class="muted">{{ s.last_error }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="empty">No struggling sources.</p>{% endif %}
+
+<h2>Unverified social/manual submissions</h2>
+{% if data.social_unverified %}
+<table>
+  <tr><th>Claimed source</th><th>Content</th></tr>
+  {% for m in data.social_unverified %}
+  <tr><td class="muted">{{ m.claimed_source }}</td><td>{{ m.content_text }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="empty">No unverified submissions.</p>{% endif %}
+{% endblock %}
