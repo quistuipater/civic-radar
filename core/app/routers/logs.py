@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -154,9 +154,12 @@ def list_logs(
     limit: int = Query(default=200, ge=1, le=1000),
     db: Session = Depends(get_db),
 ) -> list[LogEntryOut]:
-    parsed_source_id = _parse_source_id(source_id)
-    parsed_after = datetime.fromisoformat(after) if after else None
-    parsed_before = datetime.fromisoformat(before) if before else None
+    try:
+        parsed_source_id = _parse_source_id(source_id)
+        parsed_after = datetime.fromisoformat(after) if after else None
+        parsed_before = datetime.fromisoformat(before) if before else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid query parameter: {exc}") from exc
 
     entries: list[LogEntryOut] = []
     if type_ in ("pipeline", "all"):

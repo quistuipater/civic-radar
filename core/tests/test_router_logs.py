@@ -118,6 +118,18 @@ class TestListLogsBySource:
         assert len(resp.json()) == 1
 
 
+class TestListLogsMalformedParams:
+    def test_malformed_after_returns_400_not_500(self, client, db):
+        resp = client.get("/api/logs?after=not-a-date")
+
+        assert resp.status_code == 400
+
+    def test_malformed_source_id_returns_400_not_500(self, client, db):
+        resp = client.get("/api/logs?source_id=not-a-uuid")
+
+        assert resp.status_code == 400
+
+
 class TestListLogsPagination:
     def test_after_cursor_returns_only_newer_entries(self, client, db):
         now = utcnow()
