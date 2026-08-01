@@ -30,6 +30,7 @@
   <tbody id="log-rows"></tbody>
 </table>
 <p class="empty" id="log-empty" style="display:none;">No log entries match this filter.</p>
+<p class="empty" id="log-error" style="display:none;color:#d9534f;"></p>
 <p><button type="button" class="secondary" id="log-load-more">Load more</button></p>
 
 <script>
@@ -40,6 +41,7 @@
   var autoCheckbox = document.getElementById('log-autoupdate');
   var loadMoreBtn = document.getElementById('log-load-more');
   var emptyEl = document.getElementById('log-empty');
+  var errorEl = document.getElementById('log-error');
 
   var seenIds = new Set();
   var newestTimestamp = null;
@@ -131,34 +133,61 @@
     seenIds.clear();
     newestTimestamp = null;
     oldestTimestamp = null;
+    errorEl.style.display = 'none';
     fetch(buildUrl({}))
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function (entries) {
         entries.forEach(function (entry) { renderRow(entry, false); });
         updateCursorsFromEntries(entries);
         emptyEl.style.display = entries.length === 0 ? 'block' : 'none';
+        errorEl.style.display = 'none';
+      })
+      .catch(function (err) {
+        console.error('Logs fetch failed:', err);
+        errorEl.textContent = 'Failed to load logs — will retry';
+        errorEl.style.display = 'block';
+        emptyEl.style.display = 'none';
       });
   }
 
   function poll() {
     if (newestTimestamp === null) { loadInitial(); return; }
     fetch(buildUrl({ after: newestTimestamp }))
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function (entries) {
         // server returns newest-first; reverse so the final prepend order
         // in the DOM stays newest-first at the top
         entries.slice().reverse().forEach(function (entry) { renderRow(entry, true); });
         updateCursorsFromEntries(entries);
+        errorEl.style.display = 'none';
+      })
+      .catch(function (err) {
+        console.error('Logs poll failed:', err);
       });
   }
 
   function loadMore() {
     if (oldestTimestamp === null) return;
     fetch(buildUrl({ before: oldestTimestamp }))
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function (entries) {
         entries.forEach(function (entry) { renderRow(entry, false); });
         updateCursorsFromEntries(entries);
+        errorEl.style.display = 'none';
+      })
+      .catch(function (err) {
+        console.error('Logs load-more failed:', err);
+        errorEl.textContent = 'Failed to load more logs';
+        errorEl.style.display = 'block';
       });
   }
 
