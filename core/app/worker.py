@@ -21,6 +21,7 @@ from app.ingestion.onbase_agenda import ingest_onbase_agenda
 from app.ingestion.pipeline import ingest_source
 from app.ingestion.scc_planning_search import ingest_scc_planning_search
 from app.issue_matching import match_document_to_issue
+from app.log_handler import DbLogHandler, prune_app_logs
 from app.models import AiOutput, Document, Source
 from app.parsing.service import parse_document
 
@@ -28,6 +29,22 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 25
+
+_last_prune_at: datetime | None = None
+PRUNE_INTERVAL = timedelta(days=1)
+
+
+def maybe_prune_app_logs() -> None:
+    global _last_prune_at
+    now = datetime.now(timezone.utc)
+    if _last_prune_at is not None and now - _last_prune_at < PRUNE_INTERVAL:
+        return
+    db = SessionLocal()
+    try:
+        prune_app_logs(db)
+    finally:
+        db.close()
+    _last_prune_at = now
 
 
 def _bespoke_ingestors() -> dict:
@@ -72,7 +89,7 @@ def run_ingestion_tick() -> None:
                 ingestor(db, source)
             except Exception:
                 db.rollback()
-                logger.exception("ingestion crashed for source %s", source.name)
+                logger.exception("ingestion crashed for source %s", source.name, extra={"source_id": source.id})
     finally:
         db.close()
 
@@ -88,7 +105,7 @@ def run_parsing_batch() -> None:
                 parse_document(db, document)
             except Exception:
                 db.rollback()
-                logger.exception("parsing crashed for document %s", document.id)
+                logger.exception("parsing crashed for document %s", document.id, extra={"source_id": document.source_id})
     finally:
         db.close()
 
@@ -129,7 +146,7 @@ def run_ai_batch() -> None:
                     create_alert_from_classification(db, document, latest, issue)
             except Exception:
                 db.rollback()
-                logger.exception("AI pipeline crashed for document %s", document.id)
+                logger.exception("AI pipeline crashed for document %s", document.id, extra={"source_id": document.source_id})
     finally:
         db.close()
 
@@ -138,9 +155,13 @@ def tick() -> None:
     run_ingestion_tick()
     run_parsing_batch()
     run_ai_batch()
+    maybe_prune_app_logs()
 
 
 def main() -> None:
+    handler = DbLogHandler(SessionLocal)
+    handler.setLevel(logging.ERROR)
+    logging.getLogger().addHandler(handler)
     logger.info("%s worker starting (tick every %ss)", settings.project_name, settings.worker_tick_seconds)
     while True:
         try:

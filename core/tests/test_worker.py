@@ -8,7 +8,10 @@ all treated as spies -- each has its own dedicated tests elsewhere; this
 module's job is the scheduling/batching/crash-isolation logic around them.
 """
 
-from datetime import timedelta
+import logging
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 import app.worker as worker_module
 from app.archive import now_utc
@@ -267,6 +270,19 @@ class StopLoop(Exception):
 
 
 class TestMain:
+    @pytest.fixture(autouse=True)
+    def _reset_root_log_handlers(self):
+        # main() now attaches a real DbLogHandler to the root logger (Task
+        # 2). That's a process-lifetime side effect in production (main()
+        # runs once), but these tests call main() directly and repeatedly
+        # within the same test process, so without cleanup each call would
+        # leak another handler onto the shared root logger and pollute
+        # later tests (e.g. test_main.py's handler-count assertion).
+        root = logging.getLogger()
+        original_handlers = list(root.handlers)
+        yield
+        root.handlers = original_handlers
+
     def test_loops_calling_tick_then_sleeping(self, monkeypatch):
         tick_calls = []
         monkeypatch.setattr(worker_module, "tick", lambda: tick_calls.append(1))
@@ -300,3 +316,111 @@ class TestMain:
             pass
         else:
             assert False, "expected StopLoop to propagate past main()'s except Exception"
+
+
+class TestSourceIdOnCrashLogs:
+    """The 3 crash sites in worker.py tag their logger.exception() calls with
+    extra={"source_id": ...} so those specific errors are filterable by
+    source in the Logs tab. Verified via caplog rather than DbLogHandler --
+    this only needs to confirm the LogRecord carries the right extra field,
+    independent of how it's eventually persisted.
+    """
+
+    def test_ingestion_crash_is_tagged_with_source_id(self, db, db_session_factory, monkeypatch, caplog):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+
+        def boom(db, source):
+            raise RuntimeError("ingest failed")
+
+        monkeypatch.setattr(worker_module, "ingest_source", boom)
+        source = make_source(db, name="Boom Source")
+        db.commit()
+
+        with caplog.at_level(logging.ERROR):
+            worker_module.run_ingestion_tick()
+
+        [record] = [r for r in caplog.records if "ingestion crashed" in r.getMessage()]
+        assert record.source_id == source.id
+
+    def test_parsing_crash_is_tagged_with_document_source_id(self, db, db_session_factory, monkeypatch, caplog):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        source = make_source(db)
+        document = make_document(db, source=source, parser_status="pending")
+        db.commit()
+
+        def boom(db, doc):
+            raise RuntimeError("parse failed")
+
+        monkeypatch.setattr(worker_module, "parse_document", boom)
+
+        with caplog.at_level(logging.ERROR):
+            worker_module.run_parsing_batch()
+
+        [record] = [r for r in caplog.records if "parsing crashed" in r.getMessage()]
+        assert record.source_id == source.id
+
+    def test_ai_pipeline_crash_is_tagged_with_document_source_id(self, db, db_session_factory, monkeypatch, caplog):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        source = make_source(db)
+        document = make_document(db, source=source, parser_status="parsed", document_type="agenda")
+        db.commit()
+
+        def boom(db, doc):
+            raise RuntimeError("ai failed")
+
+        monkeypatch.setattr(worker_module, "run_ai_pipeline", boom)
+
+        with caplog.at_level(logging.ERROR):
+            worker_module.run_ai_batch()
+
+        [record] = [r for r in caplog.records if "AI pipeline crashed" in r.getMessage()]
+        assert record.source_id == source.id
+
+
+class TestMaybePruneAppLogs:
+    def test_prunes_on_first_call(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+        calls = []
+        monkeypatch.setattr(worker_module, "prune_app_logs", lambda db: calls.append(1))
+
+        worker_module.maybe_prune_app_logs()
+
+        assert calls == [1]
+
+    def test_skips_second_call_within_interval(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+        calls = []
+        monkeypatch.setattr(worker_module, "prune_app_logs", lambda db: calls.append(1))
+
+        worker_module.maybe_prune_app_logs()
+        worker_module.maybe_prune_app_logs()
+
+        assert calls == [1]
+
+    def test_prunes_again_after_interval_elapses(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(
+            worker_module, "_last_prune_at", datetime.now(timezone.utc) - timedelta(days=2)
+        )
+        calls = []
+        monkeypatch.setattr(worker_module, "prune_app_logs", lambda db: calls.append(1))
+
+        worker_module.maybe_prune_app_logs()
+
+        assert calls == [1]
+
+
+class TestTickPrunesAppLogs:
+    def test_tick_calls_maybe_prune_app_logs(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "run_ingestion_tick", lambda: None)
+        monkeypatch.setattr(worker_module, "run_parsing_batch", lambda: None)
+        monkeypatch.setattr(worker_module, "run_ai_batch", lambda: None)
+        calls = []
+        monkeypatch.setattr(worker_module, "maybe_prune_app_logs", lambda: calls.append(1))
+
+        worker_module.tick()
+
+        assert calls == [1]

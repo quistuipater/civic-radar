@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import dashboard
 from app.config import settings
+from app.db import SessionLocal
+from app.log_handler import DbLogHandler
 from app.routers import (
     alerts,
     crime_incidents,
@@ -31,6 +35,15 @@ app.include_router(crime_incidents.router)
 app.include_router(dashboard.router)
 
 app.mount("/archive", StaticFiles(directory=settings.archive_root), name="archive")
+
+
+def _configure_error_logging() -> None:
+    handler = DbLogHandler(SessionLocal)
+    handler.setLevel(logging.ERROR)
+    logging.getLogger().addHandler(handler)
+
+
+app.add_event_handler("startup", _configure_error_logging)
 
 
 @app.get("/healthz")
