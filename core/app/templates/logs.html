@@ -119,10 +119,11 @@
 
   function updateCursorsFromEntries(entries) {
     entries.forEach(function (entry) {
-      if (newestTimestamp === null || entry.timestamp > newestTimestamp) {
+      var entryTime = new Date(entry.timestamp).getTime();
+      if (newestTimestamp === null || entryTime > new Date(newestTimestamp).getTime()) {
         newestTimestamp = entry.timestamp;
       }
-      if (oldestTimestamp === null || entry.timestamp < oldestTimestamp) {
+      if (oldestTimestamp === null || entryTime < new Date(oldestTimestamp).getTime()) {
         oldestTimestamp = entry.timestamp;
       }
     });
