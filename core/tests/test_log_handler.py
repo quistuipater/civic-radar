@@ -7,8 +7,6 @@ isolated test transaction.
 """
 
 import logging
-import sys
-import uuid
 from datetime import timedelta
 
 from app.log_handler import DbLogHandler, prune_app_logs
