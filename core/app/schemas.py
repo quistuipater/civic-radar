@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -213,3 +214,17 @@ class ManualSubmissionOut(ORMModel):
 
 class ReviewAction(BaseModel):
     note: str | None = None
+
+
+# --- Logs ---
+
+
+class LogEntryOut(BaseModel):
+    id: str
+    type: Literal["pipeline", "error", "inference"]
+    timestamp: datetime
+    level: str
+    source_id: str | None
+    source_name: str | None
+    summary: str
+    detail: str | None
