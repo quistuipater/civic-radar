@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Logs — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Logs</h1>
+<div class="panel">
+  <label style="display:inline-block;margin-right:1.5rem;">Type
+    <select id="log-type">
+      <option value="all">All</option>
+      <option value="pipeline">Pipeline</option>
+      <option value="error">Errors</option>
+      <option value="inference">Inference</option>
+    </select>
+  </label>
+  <label style="display:inline-block;margin-right:1.5rem;">Source
+    <select id="log-source">
+      <option value="all">All sources</option>
+      {% for s in sources %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label style="display:inline-block;">
+    <input type="checkbox" id="log-autoupdate" checked> Auto-update
+  </label>
+</div>
+<table>
+  <thead>
+    <tr><th>Time</th><th>Type</th><th>Source</th><th>Summary</th></tr>
+  </thead>
+  <tbody id="log-rows"></tbody>
+</table>
+<p class="empty" id="log-empty" style="display:none;">No log entries match this filter.</p>
+<p><button type="button" class="secondary" id="log-load-more">Load more</button></p>
+
+<script>
+(function () {
+  var rowsEl = document.getElementById('log-rows');
+  var typeSel = document.getElementById('log-type');
+  var sourceSel = document.getElementById('log-source');
+  var autoCheckbox = document.getElementById('log-autoupdate');
+  var loadMoreBtn = document.getElementById('log-load-more');
+  var emptyEl = document.getElementById('log-empty');
+
+  var seenIds = new Set();
+  var newestTimestamp = null;
+  var oldestTimestamp = null;
+  var pollTimer = null;
+
+  var LEVEL_CLASS = { error: 'level-4', critical: 'level-4', pending: 'level-2', ok: 'level-1' };
+
+  function levelBadgeClass(level) {
+    return LEVEL_CLASS[(level || '').toLowerCase()] || 'level-2';
+  }
+
+  function typeLabel(type) {
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+
+  function renderRow(entry, prepend) {
+    if (seenIds.has(entry.id)) return;
+    seenIds.add(entry.id);
+
+    var tr = document.createElement('tr');
+
+    var tdTime = document.createElement('td');
+    tdTime.className = 'muted';
+    tdTime.textContent = new Date(entry.timestamp).toLocaleString();
+    tr.appendChild(tdTime);
+
+    var tdType = document.createElement('td');
+    var badge = document.createElement('span');
+    badge.className = 'badge ' + levelBadgeClass(entry.level);
+    badge.textContent = typeLabel(entry.type) + ': ' + entry.level;
+    tdType.appendChild(badge);
+    tr.appendChild(tdType);
+
+    var tdSource = document.createElement('td');
+    tdSource.className = 'muted';
+    tdSource.textContent = entry.source_name || 'general';
+    tr.appendChild(tdSource);
+
+    var tdSummary = document.createElement('td');
+    if (entry.detail) {
+      var details = document.createElement('details');
+      var summaryEl = document.createElement('summary');
+      summaryEl.textContent = entry.summary;
+      details.appendChild(summaryEl);
+      var pre = document.createElement('pre');
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.style.margin = '0.4rem 0 0';
+      pre.textContent = entry.detail;
+      details.appendChild(pre);
+      tdSummary.appendChild(details);
+    } else {
+      tdSummary.textContent = entry.summary;
+    }
+    tr.appendChild(tdSummary);
+
+    if (prepend) {
+      rowsEl.insertBefore(tr, rowsEl.firstChild);
+    } else {
+      rowsEl.appendChild(tr);
+    }
+  }
+
+  function buildUrl(extraParams) {
+    var params = { type: typeSel.value, source_id: sourceSel.value };
+    for (var key in extraParams) {
+      params[key] = extraParams[key];
+    }
+    var query = Object.keys(params)
+      .filter(function (k) { return params[k] !== null && params[k] !== undefined; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+      .join('&');
+    return '/api/logs?' + query;
+  }
+
+  function updateCursorsFromEntries(entries) {
+    entries.forEach(function (entry) {
+      if (newestTimestamp === null || entry.timestamp > newestTimestamp) {
+        newestTimestamp = entry.timestamp;
+      }
+      if (oldestTimestamp === null || entry.timestamp < oldestTimestamp) {
+        oldestTimestamp = entry.timestamp;
+      }
+    });
+  }
+
+  function loadInitial() {
+    rowsEl.innerHTML = '';
+    seenIds.clear();
+    newestTimestamp = null;
+    oldestTimestamp = null;
+    fetch(buildUrl({}))
+      .then(function (r) { return r.json(); })
+      .then(function (entries) {
+        entries.forEach(function (entry) { renderRow(entry, false); });
+        updateCursorsFromEntries(entries);
+        emptyEl.style.display = entries.length === 0 ? 'block' : 'none';
+      });
+  }
+
+  function poll() {
+    if (newestTimestamp === null) { loadInitial(); return; }
+    fetch(buildUrl({ after: newestTimestamp }))
+      .then(function (r) { return r.json(); })
+      .then(function (entries) {
+        // server returns newest-first; reverse so the final prepend order
+        // in the DOM stays newest-first at the top
+        entries.slice().reverse().forEach(function (entry) { renderRow(entry, true); });
+        updateCursorsFromEntries(entries);
+      });
+  }
+
+  function loadMore() {
+    if (oldestTimestamp === null) return;
+    fetch(buildUrl({ before: oldestTimestamp }))
+      .then(function (r) { return r.json(); })
+      .then(function (entries) {
+        entries.forEach(function (entry) { renderRow(entry, false); });
+        updateCursorsFromEntries(entries);
+      });
+  }
+
+  function startAutoUpdate() {
+    stopAutoUpdate();
+    pollTimer = setInterval(poll, 5000);
+  }
+
+  function stopAutoUpdate() {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  typeSel.addEventListener('change', loadInitial);
+  sourceSel.addEventListener('change', loadInitial);
+  loadMoreBtn.addEventListener('click', loadMore);
+  autoCheckbox.addEventListener('change', function () {
+    if (autoCheckbox.checked) { startAutoUpdate(); } else { stopAutoUpdate(); }
+  });
+
+  loadInitial();
+  if (autoCheckbox.checked) { startAutoUpdate(); }
+})();
+</script>
+{% endblock %}

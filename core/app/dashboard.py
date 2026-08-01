@@ -105,6 +105,12 @@ def sources_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/logs")
+def logs_page(request: Request, db: Session = Depends(get_db)):
+    sources = db.query(Source).order_by(Source.name).all()
+    return templates.TemplateResponse("logs.html", {"request": request, "sources": sources})
+
+
 @router.get("/review-queue")
 def review_queue_page(request: Request, db: Session = Depends(get_db)):
     data = review_queue(db)

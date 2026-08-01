@@ -42,6 +42,17 @@ class TestDashboardPages:
         resp = client.get("/api/digest/daily.md")
         assert resp.status_code == 200
 
+    def test_logs_page_renders_with_empty_database(self, client):
+        resp = client.get("/logs")
+        assert resp.status_code == 200
+
+    def test_logs_page_renders_with_sources(self, client, db):
+        make_source(db, name="A Logs Source")
+        db.commit()
+        resp = client.get("/logs")
+        assert resp.status_code == 200
+        assert "A Logs Source" in resp.text
+
 
 class TestHealthAndApi:
     def test_healthz(self, client):
@@ -51,5 +62,10 @@ class TestHealthAndApi:
 
     def test_crime_incidents_api_empty(self, client):
         resp = client.get("/api/crime-incidents")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_logs_api_empty(self, client):
+        resp = client.get("/api/logs")
         assert resp.status_code == 200
         assert resp.json() == []
