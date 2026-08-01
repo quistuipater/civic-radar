@@ -1,12 +1,13 @@
 """Process-wide error capture: DbLogHandler mirrors every ERROR+ log record
 into the app_logs table, so operational errors show up in the dashboard's
-Logs tab instead of only in Docker/stdout logs. Attached once, to the root
-logger, in worker.py's main() and main.py's startup event -- any
-logger.error()/logger.exception() call anywhere in the app is captured
-automatically, with no per-call-site changes required.
+Logs tab instead of only in Docker/stdout logs. Intended to be attached once,
+to the root logger, in worker.py's main() and main.py's startup event (wiring
+added in Task 2) -- once attached, any logger.error()/logger.exception() call
+anywhere in the app is captured automatically, with no per-call-site changes
+required.
 
-prune_app_logs implements the 30-day retention policy for this table (see
-worker.py's maybe_prune_app_logs for the throttled call site).
+prune_app_logs implements the 30-day retention policy for this table (to be
+called via worker.py's maybe_prune_app_logs throttled call, added in Task 2).
 """
 
 import logging

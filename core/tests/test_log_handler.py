@@ -14,7 +14,7 @@ from datetime import timedelta
 from app.log_handler import DbLogHandler, prune_app_logs
 from app.models import AppLog
 
-from .conftest import make_app_log, utcnow
+from .conftest import make_app_log, make_source, utcnow
 
 
 class TestDbLogHandlerEmit:
@@ -70,14 +70,15 @@ class TestDbLogHandlerEmit:
         logger = logging.getLogger("test.log_handler.source")
         logger.addHandler(handler)
         logger.propagate = False
-        source_id = uuid.uuid4()
+        source = make_source(db)
+        db.commit()
         try:
-            logger.error("scoped error", extra={"source_id": source_id})
+            logger.error("scoped error", extra={"source_id": source.id})
         finally:
             logger.removeHandler(handler)
 
         row = db.query(AppLog).one()
-        assert row.source_id == source_id
+        assert row.source_id == source.id
 
     def test_db_failure_inside_emit_does_not_raise(self, capsys):
         def broken_factory():
