@@ -412,6 +412,62 @@ class TestMaybePruneAppLogs:
 
         assert calls == [1]
 
+    def test_a_failing_prune_does_not_propagate(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+
+        def boom(db):
+            raise RuntimeError("app_logs table does not exist yet")
+
+        monkeypatch.setattr(worker_module, "prune_app_logs", boom)
+
+        worker_module.maybe_prune_app_logs()  # must not raise
+
+    def test_a_failing_prune_still_advances_last_prune_at(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+
+        def boom(db):
+            raise RuntimeError("app_logs table does not exist yet")
+
+        monkeypatch.setattr(worker_module, "prune_app_logs", boom)
+
+        before = datetime.now(timezone.utc)
+        worker_module.maybe_prune_app_logs()
+
+        assert worker_module._last_prune_at is not None
+        assert worker_module._last_prune_at >= before
+
+    def test_a_failing_prune_is_not_retried_within_the_same_interval(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+        calls = []
+
+        def boom(db):
+            calls.append(1)
+            raise RuntimeError("app_logs table does not exist yet")
+
+        monkeypatch.setattr(worker_module, "prune_app_logs", boom)
+
+        worker_module.maybe_prune_app_logs()
+        worker_module.maybe_prune_app_logs()
+
+        assert calls == [1]
+
+    def test_a_failing_prune_is_logged(self, db_session_factory, monkeypatch, caplog):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "_last_prune_at", None)
+
+        def boom(db):
+            raise RuntimeError("app_logs table does not exist yet")
+
+        monkeypatch.setattr(worker_module, "prune_app_logs", boom)
+
+        with caplog.at_level(logging.ERROR):
+            worker_module.maybe_prune_app_logs()
+
+        assert any("app_logs prune failed" in r.getMessage() for r in caplog.records)
+
 
 class TestTickPrunesAppLogs:
     def test_tick_calls_maybe_prune_app_logs(self, db, db_session_factory, monkeypatch):

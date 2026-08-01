@@ -39,12 +39,17 @@ def maybe_prune_app_logs() -> None:
     now = datetime.now(timezone.utc)
     if _last_prune_at is not None and now - _last_prune_at < PRUNE_INTERVAL:
         return
+    # Set before attempting the prune so a persistent failure (e.g. the
+    # app_logs table not existing yet) is retried once per PRUNE_INTERVAL,
+    # not on every single tick.
+    _last_prune_at = now
     db = SessionLocal()
     try:
         prune_app_logs(db)
+    except Exception:
+        logger.exception("app_logs prune failed")
     finally:
         db.close()
-    _last_prune_at = now
 
 
 def _bespoke_ingestors() -> dict:
