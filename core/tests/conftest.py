@@ -21,6 +21,7 @@ from app.models import (
     AgendaItem,
     AiOutput,
     Alert,
+    AppLog,
     Document,
     Issue,
     ManualSubmission,
@@ -192,6 +193,19 @@ def make_alert(db, document: Document | None = None, **overrides) -> Alert:
     db.add(alert)
     db.flush()
     return alert
+
+
+def make_app_log(db, **overrides) -> AppLog:
+    defaults = dict(
+        level="ERROR",
+        logger_name="app.test",
+        message="Something broke",
+    )
+    defaults.update(overrides)
+    app_log = AppLog(**defaults)
+    db.add(app_log)
+    db.flush()
+    return app_log
 
 
 def make_issue(db, **overrides) -> Issue:

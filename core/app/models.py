@@ -475,3 +475,21 @@ class CrimeIncident(Base):
     )
 
     __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_crime_incident_source_external"),)
+
+
+class AppLog(Base):
+    """A captured ERROR+ log record, written by DbLogHandler (see
+    app/log_handler.py) from every logger in the process. Exists so
+    application errors (worker crashes, unhandled exceptions) are visible
+    in the dashboard's Logs tab instead of only in Docker/stdout logs.
+    """
+
+    __tablename__ = "app_logs"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    level: Mapped[str] = mapped_column(Text, nullable=False)
+    logger_name: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    traceback: Mapped[str | None] = mapped_column(Text)
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
