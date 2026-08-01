@@ -125,7 +125,9 @@ class TestListLogsPagination:
         make_app_log(db, message="new", created_at=now)
         db.commit()
 
-        resp = client.get(f"/api/logs?type=error&after={(now - timedelta(minutes=5)).isoformat()}")
+        resp = client.get(
+            "/api/logs", params={"type": "error", "after": (now - timedelta(minutes=5)).isoformat()}
+        )
 
         summaries = [e["summary"] for e in resp.json()]
         assert summaries == ["new"]
@@ -136,7 +138,9 @@ class TestListLogsPagination:
         make_app_log(db, message="new", created_at=now)
         db.commit()
 
-        resp = client.get(f"/api/logs?type=error&before={(now - timedelta(minutes=5)).isoformat()}")
+        resp = client.get(
+            "/api/logs", params={"type": "error", "before": (now - timedelta(minutes=5)).isoformat()}
+        )
 
         summaries = [e["summary"] for e in resp.json()]
         assert summaries == ["old"]

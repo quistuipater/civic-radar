@@ -31,18 +31,6 @@ def _parse_source_id(raw: str | None) -> uuid.UUID | None:
     return None if raw in (None, "all") else uuid.UUID(raw)
 
 
-def _restore_offset_plus(raw: str) -> str:
-    # Starlette decodes query strings with urllib.parse.parse_qsl(), which
-    # applies application/x-www-form-urlencoded semantics: a literal "+"
-    # becomes a space. An ISO 8601 timestamp with a "+HH:MM" UTC offset (as
-    # produced by datetime.isoformat()) arrives here as "... HH:MM" instead
-    # of "...+HH:MM" unless the caller percent-encoded it as "%2B" -- so a
-    # bare space immediately before what looks like a zone offset is
-    # restored to "+" before parsing. ISO timestamps never otherwise contain
-    # a space (the date/time separator is "T"), so this is unambiguous.
-    return raw.replace(" ", "+")
-
-
 def _pipeline_entries(
     db: Session,
     source_id: uuid.UUID | None,
@@ -167,8 +155,8 @@ def list_logs(
     db: Session = Depends(get_db),
 ) -> list[LogEntryOut]:
     parsed_source_id = _parse_source_id(source_id)
-    parsed_after = datetime.fromisoformat(_restore_offset_plus(after)) if after else None
-    parsed_before = datetime.fromisoformat(_restore_offset_plus(before)) if before else None
+    parsed_after = datetime.fromisoformat(after) if after else None
+    parsed_before = datetime.fromisoformat(before) if before else None
 
     entries: list[LogEntryOut] = []
     if type_ in ("pipeline", "all"):
