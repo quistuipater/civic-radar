@@ -129,10 +129,6 @@
   }
 
   function loadInitial() {
-    rowsEl.innerHTML = '';
-    seenIds.clear();
-    newestTimestamp = null;
-    oldestTimestamp = null;
     errorEl.style.display = 'none';
     fetch(buildUrl({}))
       .then(function (r) {
@@ -140,6 +136,10 @@
         return r.json();
       })
       .then(function (entries) {
+        rowsEl.innerHTML = '';
+        seenIds.clear();
+        newestTimestamp = null;
+        oldestTimestamp = null;
         entries.forEach(function (entry) { renderRow(entry, false); });
         updateCursorsFromEntries(entries);
         emptyEl.style.display = entries.length === 0 ? 'block' : 'none';
