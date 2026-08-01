@@ -254,7 +254,8 @@ class TestRunAiBatch:
 
 
 class TestTick:
-    def test_runs_all_three_batches_in_order(self, monkeypatch):
+    def test_runs_all_three_batches_in_order(self, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
         calls = []
         monkeypatch.setattr(worker_module, "run_ingestion_tick", lambda: calls.append("ingestion"))
         monkeypatch.setattr(worker_module, "run_parsing_batch", lambda: calls.append("parsing"))
