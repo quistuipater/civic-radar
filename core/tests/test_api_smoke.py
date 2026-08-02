@@ -5,7 +5,7 @@ list is empty" or "a route references a column that no longer exists"
 before a human notices in the browser.
 """
 
-from .conftest import make_source
+from .conftest import make_news_source, make_source
 
 
 class TestDashboardPages:
@@ -53,6 +53,20 @@ class TestDashboardPages:
         assert resp.status_code == 200
         assert "A Logs Source" in resp.text
 
+    def test_news_page_renders_with_empty_database(self, client):
+        resp = client.get("/news")
+
+        assert resp.status_code == 200
+
+    def test_news_page_renders_with_news_sources(self, client, db):
+        make_news_source(db, name="Ventura Breeze")
+        db.commit()
+
+        resp = client.get("/news")
+
+        assert resp.status_code == 200
+        assert "Ventura Breeze" in resp.text
+
 
 class TestHealthAndApi:
     def test_healthz(self, client):
@@ -67,5 +81,11 @@ class TestHealthAndApi:
 
     def test_logs_api_empty(self, client):
         resp = client.get("/api/logs")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_news_api_empty(self, client):
+        resp = client.get("/api/news")
+
         assert resp.status_code == 200
         assert resp.json() == []

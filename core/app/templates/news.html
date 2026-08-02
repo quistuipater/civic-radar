@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}News — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>News</h1>
+<div class="panel">
+  <label style="display:inline-block;margin-right:1.5rem;">Topic
+    <select id="news-topic">
+      <option value="all">All topics</option>
+      <option value="land_use">Land Use</option>
+      <option value="planning">Planning</option>
+      <option value="zoning">Zoning</option>
+      <option value="coastal_development">Coastal Development</option>
+      <option value="hillside_development">Hillside Development</option>
+      <option value="housing">Housing</option>
+      <option value="ceqa_environment">CEQA / Environment</option>
+      <option value="public_notice_transparency">Public Notice / Transparency</option>
+      <option value="elections">Elections</option>
+      <option value="campaign_finance">Campaign Finance</option>
+      <option value="budget_tax_fees">Budget / Tax / Fees</option>
+      <option value="water">Water</option>
+      <option value="transportation">Transportation</option>
+      <option value="police_public_safety">Police / Public Safety</option>
+      <option value="homelessness">Homelessness</option>
+      <option value="schools">Schools</option>
+      <option value="parks_open_space">Parks / Open Space</option>
+      <option value="cannabis">Cannabis</option>
+      <option value="short_term_rentals">Short-Term Rentals</option>
+      <option value="public_contracts">Public Contracts</option>
+      <option value="appointments_commissions">Appointments / Commissions</option>
+      <option value="litigation">Litigation</option>
+      <option value="ethics_conflict_of_interest">Ethics / Conflict of Interest</option>
+      <option value="infrastructure">Infrastructure</option>
+      <option value="general_governance">General Governance</option>
+    </select>
+  </label>
+  <label style="display:inline-block;">Outlet
+    <select id="news-source">
+      <option value="all">All outlets</option>
+      {% for s in news_sources %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>
+<table>
+  <thead>
+    <tr><th>Published</th><th>Headline</th><th>Outlet</th><th>Topics</th></tr>
+  </thead>
+  <tbody id="news-rows"></tbody>
+</table>
+<p class="empty" id="news-empty" style="display:none;">No articles match this filter.</p>
+<p class="empty" id="news-error" style="display:none;color:#d9534f;"></p>
+<p><button type="button" class="secondary" id="news-load-more">Load more</button></p>
+
+<script>
+(function () {
+  var rowsEl = document.getElementById('news-rows');
+  var topicSel = document.getElementById('news-topic');
+  var sourceSel = document.getElementById('news-source');
+  var loadMoreBtn = document.getElementById('news-load-more');
+  var emptyEl = document.getElementById('news-empty');
+  var errorEl = document.getElementById('news-error');
+
+  var oldestPublishedAt = null;
+
+  function renderRow(article) {
+    var tr = document.createElement('tr');
+
+    var tdTime = document.createElement('td');
+    tdTime.className = 'muted';
+    tdTime.textContent = article.published_at ? new Date(article.published_at).toLocaleDateString() : 'undated';
+    tr.appendChild(tdTime);
+
+    var tdHeadline = document.createElement('td');
+    if (article.summary) {
+      var details = document.createElement('details');
+      var summaryEl = document.createElement('summary');
+      var link = document.createElement('a');
+      link.className = 'link';
+      link.href = article.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = article.title;
+      summaryEl.appendChild(link);
+      details.appendChild(summaryEl);
+      var p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = article.summary;
+      details.appendChild(p);
+      tdHeadline.appendChild(details);
+    } else {
+      var plainLink = document.createElement('a');
+      plainLink.className = 'link';
+      plainLink.href = article.url;
+      plainLink.target = '_blank';
+      plainLink.rel = 'noopener noreferrer';
+      plainLink.textContent = article.title;
+      tdHeadline.appendChild(plainLink);
+    }
+    tr.appendChild(tdHeadline);
+
+    var tdOutlet = document.createElement('td');
+    tdOutlet.className = 'muted';
+    tdOutlet.textContent = article.outlet_name;
+    tr.appendChild(tdOutlet);
+
+    var tdTopics = document.createElement('td');
+    article.topic_categories.forEach(function (topic) {
+      var badge = document.createElement('span');
+      badge.className = 'badge level-2';
+      badge.style.marginRight = '0.3rem';
+      badge.textContent = topic;
+      tdTopics.appendChild(badge);
+    });
+    tr.appendChild(tdTopics);
+
+    rowsEl.appendChild(tr);
+  }
+
+  function buildUrl(extraParams) {
+    var params = { topic: topicSel.value, source_id: sourceSel.value };
+    for (var key in extraParams) {
+      params[key] = extraParams[key];
+    }
+    var query = Object.keys(params)
+      .filter(function (k) { return params[k] !== null && params[k] !== undefined; })
+      .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+      .join('&');
+    return '/api/news?' + query;
+  }
+
+  function updateOldestFromEntries(articles) {
+    articles.forEach(function (article) {
+      if (!article.published_at) return;
+      if (oldestPublishedAt === null || new Date(article.published_at).getTime() < new Date(oldestPublishedAt).getTime()) {
+        oldestPublishedAt = article.published_at;
+      }
+    });
+  }
+
+  function loadInitial() {
+    errorEl.style.display = 'none';
+    fetch(buildUrl({}))
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (articles) {
+        rowsEl.innerHTML = '';
+        oldestPublishedAt = null;
+        articles.forEach(renderRow);
+        updateOldestFromEntries(articles);
+        emptyEl.style.display = articles.length === 0 ? 'block' : 'none';
+        errorEl.style.display = 'none';
+      })
+      .catch(function (err) {
+        console.error('News fetch failed:', err);
+        errorEl.textContent = 'Failed to load news';
+        errorEl.style.display = 'block';
+        emptyEl.style.display = 'none';
+      });
+  }
+
+  function loadMore() {
+    if (oldestPublishedAt === null) return;
+    fetch(buildUrl({ before: oldestPublishedAt }))
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (articles) {
+        articles.forEach(renderRow);
+        updateOldestFromEntries(articles);
+        errorEl.style.display = 'none';
+      })
+      .catch(function (err) {
+        console.error('News load-more failed:', err);
+        errorEl.textContent = 'Failed to load more news';
+        errorEl.style.display = 'block';
+      });
+  }
+
+  topicSel.addEventListener('change', loadInitial);
+  sourceSel.addEventListener('change', loadInitial);
+  loadMoreBtn.addEventListener('click', loadMore);
+
+  loadInitial();
+})();
+</script>
+{% endblock %}

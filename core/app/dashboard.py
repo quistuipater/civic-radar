@@ -29,6 +29,7 @@ from app.models import (
     ManualSubmission,
     Meeting,
     MeetingTranscript,
+    NewsSource,
     Source,
 )
 from app.routers.review import review_queue
@@ -109,6 +110,12 @@ def sources_page(request: Request, db: Session = Depends(get_db)):
 def logs_page(request: Request, db: Session = Depends(get_db)):
     sources = db.query(Source).order_by(Source.name).all()
     return templates.TemplateResponse("logs.html", {"request": request, "sources": sources})
+
+
+@router.get("/news")
+def news_page(request: Request, db: Session = Depends(get_db)):
+    news_sources = db.query(NewsSource).order_by(NewsSource.name).all()
+    return templates.TemplateResponse("news.html", {"request": request, "news_sources": news_sources})
 
 
 @router.get("/review-queue")
