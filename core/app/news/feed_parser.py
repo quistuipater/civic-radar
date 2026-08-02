@@ -11,6 +11,14 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree
 
+# WordPress RSS feeds publish the full article body (the theme-free output of
+# `the_content`) in this namespaced element -- distinct from <description>,
+# which is a short excerpt. Using it lets retrieval.py skip fetching the live
+# article page entirely for outlets that provide it, avoiding both an extra
+# HTTP round-trip and the nav/sidebar/footer noise a full-page text
+# extraction would otherwise pick up.
+CONTENT_ENCODED_TAG = "{http://purl.org/rss/1.0/modules/content/}encoded"
+
 
 @dataclass
 class NewsItem:
@@ -18,6 +26,7 @@ class NewsItem:
     link: str
     summary: str | None
     published_at: datetime | None
+    content_encoded: str | None = None
 
 
 def parse_feed(xml_bytes: bytes) -> list[NewsItem]:
@@ -33,8 +42,17 @@ def parse_feed(xml_bytes: bytes) -> list[NewsItem]:
         if not link or not title:
             continue
         description = (item.findtext("description") or "").strip() or None
+        content_encoded = (item.findtext(CONTENT_ENCODED_TAG) or "").strip() or None
         published_at = _parse_pub_date((item.findtext("pubDate") or "").strip())
-        items.append(NewsItem(title=title, link=link, summary=description, published_at=published_at))
+        items.append(
+            NewsItem(
+                title=title,
+                link=link,
+                summary=description,
+                published_at=published_at,
+                content_encoded=content_encoded,
+            )
+        )
     return items
 
 

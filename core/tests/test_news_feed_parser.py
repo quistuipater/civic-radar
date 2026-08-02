@@ -6,6 +6,18 @@ handles both.
 
 from app.news.feed_parser import parse_feed
 
+RSS_WITH_CONTENT_ENCODED = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+<item>
+  <title>City Council Approves New Zoning Rules</title>
+  <link>https://example.invalid/article-1</link>
+  <description>The council voted 4-1 to approve changes.</description>
+  <content:encoded><![CDATA[<p>Full clean article body about the zoning vote, no site chrome.</p>]]></content:encoded>
+</item>
+</channel>
+</rss>"""
+
 VALID_RSS = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
@@ -38,6 +50,7 @@ class TestParseFeed:
         assert items[0].published_at.year == 2026
         assert items[0].published_at.month == 8
         assert items[0].published_at.day == 1
+        assert items[0].content_encoded is None
 
     def test_returns_empty_list_for_malformed_xml(self):
         items = parse_feed(b"not xml at all <<<")
@@ -82,3 +95,22 @@ class TestParseFeed:
         items = parse_feed(xml)
 
         assert items[0].published_at is None
+
+
+class TestParseFeedContentEncoded:
+    def test_extracts_content_encoded_when_present(self):
+        items = parse_feed(RSS_WITH_CONTENT_ENCODED)
+
+        assert len(items) == 1
+        assert items[0].content_encoded == "<p>Full clean article body about the zoning vote, no site chrome.</p>"
+
+    def test_content_encoded_is_none_when_absent(self):
+        xml = b"""<rss><channel><item>
+          <title>No Content Encoded Here</title>
+          <link>https://example.invalid/no-content-encoded</link>
+          <description>desc</description>
+        </item></channel></rss>"""
+
+        items = parse_feed(xml)
+
+        assert items[0].content_encoded is None

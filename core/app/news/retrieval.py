@@ -69,7 +69,17 @@ def _archive_and_save(db: Session, news_source: NewsSource, item: NewsItem) -> N
     archive_path: str | None = None
 
     if news_source.connector == "wordpress_rss":
-        full_text, archive_path = _fetch_and_extract(news_source.name, item.link)
+        if item.content_encoded:
+            # Prefer the feed's own <content:encoded> -- it's the clean
+            # article body (no nav/sidebar/footer chrome) and comes for free
+            # in the feed fetch we already made, so no extra HTTP round-trip.
+            full_text, archive_path = _archive_and_extract_html(
+                news_source.name, item.content_encoded.encode("utf-8")
+            )
+        else:
+            # Not every WordPress feed configuration includes content:encoded
+            # -- fall back to fetching the live article page.
+            full_text, archive_path = _fetch_and_extract(news_source.name, item.link)
 
     categories, method, confidence = classify_article(item.title, item.summary, full_text)
 
@@ -97,18 +107,21 @@ def _fetch_and_extract(outlet_name: str, article_url: str) -> tuple[str | None, 
         logger.info("news article fetch failed for %s: %s", article_url, exc)
         return None, None
 
-    body = response.content
-    page_hash = sha256_hex(body)
+    return _archive_and_extract_html(outlet_name, response.content)
+
+
+def _archive_and_extract_html(outlet_name: str, html_bytes: bytes) -> tuple[str | None, str | None]:
+    page_hash = sha256_hex(html_bytes)
     when = now_utc()
     directory = (
         Path(settings.archive_root) / "news" / slugify(outlet_name) / str(when.year) / when.strftime("%Y-%m-%d")
     )
-    path = write_archive_file(directory, f"article_{page_hash[:12]}.html", body)
+    path = write_archive_file(directory, f"article_{page_hash[:12]}.html", html_bytes)
 
     try:
         parsed = parse_file(path, "text/html")
     except Exception:
-        logger.info("news article text extraction failed for %s", article_url)
+        logger.info("news article text extraction failed for archived file %s", path)
         return None, str(path)
 
     return parsed.full_text, str(path)

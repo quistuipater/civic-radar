@@ -36,6 +36,16 @@ RSS_TWO_ITEMS = b"""<?xml version="1.0"?>
 </item>
 </channel></rss>"""
 
+RSS_ONE_ITEM_WITH_CONTENT_ENCODED = b"""<?xml version="1.0"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
+<item>
+  <title>City Council Approves New Zoning Rules</title>
+  <link>https://example.invalid/article-1</link>
+  <description>The council voted on a zoning variance.</description>
+  <content:encoded><![CDATA[<p>Full clean article body about zoning, no site chrome.</p>]]></content:encoded>
+</item>
+</channel></rss>"""
+
 
 def fake_response(content: bytes, status_code: int = 200) -> httpx.Response:
     return httpx.Response(status_code=status_code, content=content)
@@ -146,6 +156,45 @@ class TestWordpressRssFullTextFetch:
         assert article.full_text is None
         assert article.archive_path is None
         assert article.summary == "The council voted on a zoning variance."
+
+
+class TestWordpressRssContentEncoded:
+    def test_uses_content_encoded_without_fetching_article_page(self, db, archive_root, monkeypatch):
+        news_source = make_news_source(db, connector="wordpress_rss")
+        calls = []
+
+        def tracking_fetch(url, **kwargs):
+            calls.append(url)
+            return fake_response(RSS_ONE_ITEM_WITH_CONTENT_ENCODED)
+
+        monkeypatch.setattr(retrieval_module, "fetch_url", tracking_fetch)
+
+        poll_news_source(db, news_source)
+
+        # Only the feed URL was fetched -- content:encoded made the article-page fetch unnecessary.
+        assert calls == [news_source.rss_feed_url]
+        article = db.query(NewsArticle).one()
+        assert "Full clean article body about zoning, no site chrome." in article.full_text
+        assert article.archive_path is not None
+
+    def test_falls_back_to_page_fetch_when_content_encoded_absent(self, db, archive_root, monkeypatch):
+        news_source = make_news_source(db, connector="wordpress_rss")
+        calls = []
+
+        def fetch_by_url(url, **kwargs):
+            calls.append(url)
+            if url == news_source.rss_feed_url:
+                return fake_response(RSS_ONE_ITEM)
+            return fake_response(b"<html><body><p>Full article body text.</p></body></html>")
+
+        monkeypatch.setattr(retrieval_module, "fetch_url", fetch_by_url)
+
+        poll_news_source(db, news_source)
+
+        # No content:encoded in RSS_ONE_ITEM -- both the feed and the article page were fetched.
+        assert calls == [news_source.rss_feed_url, "https://example.invalid/article-1"]
+        article = db.query(NewsArticle).one()
+        assert "Full article body text." in article.full_text
 
 
 class TestPollNewsSourcePerItemIsolation:
