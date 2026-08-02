@@ -40,16 +40,19 @@ live" convention of `seed_sources.py`. Two connector types:
 | Ventura Breeze | `https://venturabreeze.com/feed/` | `wordpress_rss` |
 | The Camarillo Acorn | `https://www.thecamarilloacorn.com/feed/` | `wordpress_rss` |
 | The Acorn (portal — Agoura Hills/Calabasas/Oak Park/Westlake) | `https://www.theacorn.com/feed/` | `wordpress_rss` |
-| Simi Valley Acorn | `https://www.simivalleyacorn.com/feed/` | `wordpress_rss` (verify live at seed time) |
-| Moorpark Acorn | `https://www.mpacorn.com/feed/` | `wordpress_rss` (verify live at seed time) |
-| Thousand Oaks Acorn | `https://www.toacorn.com/feed/` | `wordpress_rss` (verify live at seed time) |
-| Ojai Valley News | `https://www.ojaivalleynews.com/feed/` (unconfirmed — 404'd once, rate-limited on retry) | `wordpress_rss` (verify live at seed time; drop if no working feed found) |
+| Simi Valley Acorn | `https://www.simivalleyacorn.com/feed/` | `wordpress_rss` |
+| Moorpark Acorn | `https://www.mpacorn.com/feed/` | `wordpress_rss` |
+| Thousand Oaks Acorn | `https://www.toacorn.com/feed/` | `wordpress_rss` |
 | Ventura County Star | `https://news.google.com/rss/search?q=site%3Avcstar.com&hl=en-US&gl=US&ceid=US%3Aen` | `google_news_proxy` |
+| Fillmore Gazette | `https://news.google.com/rss/search?q=site%3Afillmoregazette.com&hl=en-US&gl=US&ceid=US%3Aen` | `google_news_proxy` (site has no reachable HTTPS) |
+| Santa Paula Times | `https://news.google.com/rss/search?q=site%3Asantapaulatimes.com&hl=en-US&gl=US&ceid=US%3Aen` | `google_news_proxy` (site has no RSS feed at all) |
+| Ojai Valley News | `https://news.google.com/rss/search?q=site%3Aojaivalleynews.com&hl=en-US&gl=US&ceid=US%3Aen` | `google_news_proxy` (own `/feed/` failed 404 then 429 across three attempts) |
 
-Fillmore Gazette and Santa Paula Times were identified as existing
-publications but no live feed was verified during design; add them at seed
-time if a working feed is found, otherwise leave out rather than guess a
-URL.
+Ojai Valley News, Fillmore Gazette, and Santa Paula Times all lack a
+reachable first-party RSS feed (confirmed after repeated attempts, added
+2026-08-01 as a fast follow-up once the Google News proxy pattern proved
+out for VC Star) — all three route through the same Google News proxy
+mechanism instead, rather than being left out.
 
 `NewsSource.connector` distinguishes the two feed shapes:
 - `wordpress_rss`: standard WordPress RSS 2.0, `<link>` points directly at

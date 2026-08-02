@@ -50,6 +50,30 @@ NEWS_SOURCES = [
         rss_feed_url="https://news.google.com/rss/search?q=site%3Avcstar.com&hl=en-US&gl=US&ceid=US%3Aen",
         connector="google_news_proxy",
     ),
+    # These three outlets have no reachable first-party RSS: Fillmore Gazette's
+    # site doesn't serve HTTPS at all, Santa Paula Times has no RSS feed
+    # anywhere on its site (confirmed 404 on /feed/, no <link rel=alternate>),
+    # and Ojai Valley News's /feed/ has failed with 404 then 429 across three
+    # separate attempts. Same Google News proxy pattern as VC Star: snippet
+    # only, connector code never follows the <link> (it's a Google redirect).
+    dict(
+        name="Fillmore Gazette",
+        outlet_url="http://www.fillmoregazette.com/",
+        rss_feed_url="https://news.google.com/rss/search?q=site%3Afillmoregazette.com&hl=en-US&gl=US&ceid=US%3Aen",
+        connector="google_news_proxy",
+    ),
+    dict(
+        name="Santa Paula Times",
+        outlet_url="https://santapaulatimes.com/",
+        rss_feed_url="https://news.google.com/rss/search?q=site%3Asantapaulatimes.com&hl=en-US&gl=US&ceid=US%3Aen",
+        connector="google_news_proxy",
+    ),
+    dict(
+        name="Ojai Valley News",
+        outlet_url="https://www.ojaivalleynews.com/",
+        rss_feed_url="https://news.google.com/rss/search?q=site%3Aojaivalleynews.com&hl=en-US&gl=US&ceid=US%3Aen",
+        connector="google_news_proxy",
+    ),
 ]
 
 
