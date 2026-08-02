@@ -136,6 +136,27 @@ Respond with ONLY a JSON object matching this exact shape:
 If no substantive items are found, respond with {{"items": []}}.
 """
 
+NEWS_CLASSIFICATION_PROMPT = """You are a civic-news classification assistant for {project_name}.
+Classify the following local news article by which civic topics it covers, if any. Be
+conservative: if the article is not meaningfully about local government or civic affairs
+(e.g. sports, obituaries, entertainment, feel-good human interest), return an empty list
+rather than forcing a fit.
+
+Allowed topic_categories (choose 0-3): {taxonomy}
+
+Article title: {title}
+
+Text:
+---
+{text}
+---
+
+Respond with ONLY a JSON object matching this exact shape:
+{{
+  "topic_categories": ["..."]
+}}
+"""
+
 PROMPT_DEFAULTS = [
     dict(
         prompt_key="agenda_item_classification",
