@@ -42,6 +42,8 @@ def heuristic_classify_article(title: str, summary: str | None, full_text: str |
     haystack = " ".join(filter(None, [title, summary, full_text])).lower()
     scores: dict[str, int] = {}
     for category, keywords in NEWS_TOPIC_KEYWORDS.items():
+        if category not in TOPIC_TAXONOMY:
+            continue
         count = sum(1 for kw in keywords if kw in haystack)
         if count:
             scores[category] = count

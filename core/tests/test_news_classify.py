@@ -42,6 +42,22 @@ class TestHeuristicClassifyArticle:
 
         assert "short_term_rentals" in categories
 
+    def test_filters_categories_not_in_taxonomy(self, monkeypatch):
+        """Ensure heuristic path validates against TOPIC_TAXONOMY, same as AI path.
+        Simulates a stale keyword entry not in the taxonomy by adding a fake category.
+        """
+        stale_keywords = classify_module.NEWS_TOPIC_KEYWORDS.copy()
+        stale_keywords["stale_removed_category"] = ["zoning", "rezone"]  # Would match but shouldn't be returned
+        monkeypatch.setattr(classify_module, "NEWS_TOPIC_KEYWORDS", stale_keywords)
+
+        categories = heuristic_classify_article(
+            "City Council Approves New Zoning Rules", "A zoning variance was granted.", None
+        )
+
+        # Should return "zoning" (valid taxonomy entry) but NOT "stale_removed_category"
+        assert "zoning" in categories
+        assert "stale_removed_category" not in categories
+
 
 class TestClassifyArticle:
     def test_returns_medium_confidence_when_heuristic_matches(self):
