@@ -357,6 +357,7 @@ docker compose up -d postgres
 docker compose run --rm api python scripts/init_db.py
 docker compose run --rm api python scripts/seed_sources.py
 docker compose run --rm api python scripts/seed_prompts.py
+docker compose run --rm api python scripts/seed_news_sources.py
 docker compose up -d api worker
 ```
 
@@ -536,6 +537,8 @@ specific to this deployment:
 cities/ventura/
   seed_sources.py       the Phase 1 source registry — bind-mounted into the
                          container over ../../core/scripts/seed_sources.py
+  seed_news_sources.py   the local news outlet registry — bind-mounted into
+                          the container over ../../core/scripts/seed_news_sources.py
   city_settings.py       crime AGENCY_CONFIG (Ventura PD, VC Sheriff) —
                           bind-mounted over ../../core/app/city_config.py
   docker-compose.yml     builds against ../../core; Ventura's ports/DB name/env vars

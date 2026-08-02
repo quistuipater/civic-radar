@@ -97,6 +97,7 @@ core/                    the engine — one Python package, shared by every city
     archive.py, alerting.py, scoring.py, issue_matching.py
     city_config.py         per-city structured overrides (see below) — default/fallback
     ai/                     prompts, classification, summarization, embeddings, Ollama client
+    news/                   RSS retrieval + heuristic/AI classification for the news feed
     export/                 daily digest + issue brief Markdown export
     ingestion/
       pipeline.py            CONNECTORS registry (generic connectors, all cities)
