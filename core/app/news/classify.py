@@ -5,6 +5,8 @@ ai/classify.py) only fires when the heuristic finds nothing, keeping
 steady-state inference load low at news volume.
 """
 
+import re
+
 from app.ai import ollama_client
 from app.ai.prompts import NEWS_CLASSIFICATION_PROMPT, TOPIC_TAXONOMY
 from app.config import settings
@@ -44,7 +46,7 @@ def heuristic_classify_article(title: str, summary: str | None, full_text: str |
     for category, keywords in NEWS_TOPIC_KEYWORDS.items():
         if category not in TOPIC_TAXONOMY:
             continue
-        count = sum(1 for kw in keywords if kw in haystack)
+        count = sum(1 for kw in keywords if re.search(rf"\b{re.escape(kw)}\b", haystack))
         if count:
             scores[category] = count
     ranked = sorted(scores.items(), key=lambda pair: pair[1], reverse=True)

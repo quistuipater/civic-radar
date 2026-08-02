@@ -58,6 +58,34 @@ class TestHeuristicClassifyArticle:
         assert "zoning" in categories
         assert "stale_removed_category" not in categories
 
+    def test_does_not_match_substring_inside_a_different_word(self):
+        categories = heuristic_classify_article(
+            "The board discussed several issues at length.", None, None
+        )
+
+        assert "litigation" not in categories
+
+    def test_does_not_match_pursued_as_sued(self):
+        categories = heuristic_classify_article(
+            "She pursued a career in baking.", None, None
+        )
+
+        assert "litigation" not in categories
+
+    def test_does_not_match_parking_as_park(self):
+        categories = heuristic_classify_article(
+            "The new parking garage opens downtown.", None, None
+        )
+
+        assert "parks_open_space" not in categories
+
+    def test_does_not_match_trailer_as_trail(self):
+        categories = heuristic_classify_article(
+            "A trailer overturned on the highway.", None, None
+        )
+
+        assert categories == []
+
 
 class TestClassifyArticle:
     def test_returns_medium_confidence_when_heuristic_matches(self):
