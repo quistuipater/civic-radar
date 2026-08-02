@@ -59,14 +59,30 @@ NON_ARTICLE_TITLE_LABELS = {
 
 
 def _looks_like_non_article(title: str, outlet_name: str) -> bool:
-    label = title
-    suffix = f" - {outlet_name}"
-    if label.lower().endswith(suffix.lower()):
-        label = label[: -len(suffix)]
-    label = label.strip().lower()
+    stripped = _strip_outlet_suffix(title, outlet_name)
+    if stripped is None:
+        # Couldn't confidently isolate the "- {Outlet}" suffix Google always
+        # appends (e.g. Google renders the source name slightly differently
+        # than how we seeded it -- "The Fillmore Gazette" vs "Fillmore
+        # Gazette"). Checking the *un*stripped title against the outlet name
+        # would trivially match every item, since that suffix is always
+        # present -- so when we can't isolate it, don't guess; only the
+        # exact-strip path below is precise enough to apply either check.
+        return False
+    label = stripped.strip().lower()
     if label in NON_ARTICLE_TITLE_LABELS:
         return True
     return outlet_name.lower() in label
+
+
+def _strip_outlet_suffix(title: str, outlet_name: str) -> str | None:
+    lowered = title.lower()
+    outlet_lower = outlet_name.lower()
+    for prefix in ("", "the "):
+        suffix = f" - {prefix}{outlet_lower}"
+        if lowered.endswith(suffix):
+            return title[: -len(suffix)]
+    return None
 
 
 def poll_news_source(db: Session, news_source: NewsSource) -> int:

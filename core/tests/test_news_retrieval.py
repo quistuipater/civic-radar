@@ -242,6 +242,30 @@ class TestFilterNonArticleTitles:
             "Fillmore Middle School Campus Receives Facelift - The Fillmore Gazette", "The Fillmore Gazette"
         )
 
+    def test_handles_the_prefix_mismatch_between_seeded_name_and_google_display_name(self):
+        # Regression test: Google renders this outlet as "The Fillmore Gazette"
+        # even though it's seeded as "Fillmore Gazette" (no "The"). Real
+        # articles must not be filtered just because the raw, unstripped
+        # title still contains the outlet name via Google's own suffix.
+        outlet_name = "Fillmore Gazette"
+        assert not retrieval_module._looks_like_non_article(
+            "Fillmore Middle School Campus Receives Facelift - The Fillmore Gazette", outlet_name
+        )
+        assert not retrieval_module._looks_like_non_article(
+            "The Thomas Wallace More Murder - The Fillmore Gazette", outlet_name
+        )
+        # Blocklisted utility pages must still be caught despite the "The " mismatch.
+        assert retrieval_module._looks_like_non_article("Advertise - The Fillmore Gazette", outlet_name)
+        # A masthead/tagline page that repeats the outlet name mid-headline is still caught.
+        assert retrieval_module._looks_like_non_article(
+            "The Fillmore Gazette | Newspaper of Record for the City of Fillmore - The Fillmore Gazette",
+            outlet_name,
+        )
+
+    def test_returns_false_when_suffix_cannot_be_isolated_at_all(self):
+        # No " - {outlet}" suffix present in any recognized form -- don't guess.
+        assert not retrieval_module._looks_like_non_article("Some headline with no outlet suffix", "Fillmore Gazette")
+
 
 class TestPollNewsSourcePerItemIsolation:
     def test_one_bad_item_does_not_abort_the_whole_poll(self, db, archive_root, monkeypatch):
