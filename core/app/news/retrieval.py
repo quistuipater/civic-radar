@@ -20,6 +20,12 @@ from app.parsing.extract import parse_file
 
 logger = logging.getLogger(__name__)
 
+# Local WordPress RSS feeds each carry only their own ~10-20 latest items, so
+# this cap is about bounding one source's per-poll work if a feed is unusually
+# large, not backfill pacing -- items beyond the cap are simply picked up on
+# the next poll (they're not yet in the DB, so they aren't skipped as dupes).
+MAX_NEW_ARTICLES_PER_POLL = 20
+
 
 def poll_news_source(db: Session, news_source: NewsSource) -> int:
     """Fetches news_source's feed, archives+classifies new items, updates
@@ -38,10 +44,17 @@ def poll_news_source(db: Session, news_source: NewsSource) -> int:
     items = parse_feed(response.content)
     new_count = 0
     for item in items:
+        if new_count >= MAX_NEW_ARTICLES_PER_POLL:
+            break
         already_seen = db.query(NewsArticle.id).filter(NewsArticle.url == item.link).first()
         if already_seen:
             continue
-        _archive_and_save(db, news_source, item)
+        try:
+            _archive_and_save(db, news_source, item)
+        except Exception:
+            db.rollback()
+            logger.exception("failed to archive/classify article %s for source %s", item.link, news_source.name)
+            continue
         new_count += 1
 
     news_source.last_error = None

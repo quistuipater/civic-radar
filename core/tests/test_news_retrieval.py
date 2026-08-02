@@ -146,3 +146,37 @@ class TestWordpressRssFullTextFetch:
         assert article.full_text is None
         assert article.archive_path is None
         assert article.summary == "The council voted on a zoning variance."
+
+
+class TestPollNewsSourcePerItemIsolation:
+    def test_one_bad_item_does_not_abort_the_whole_poll(self, db, archive_root, monkeypatch):
+        news_source = make_news_source(db, connector="google_news_proxy")
+        db.commit()  # the news_source row must survive the per-item rollback below, like a real
+        # pre-existing source would -- db.rollback() rolls back the whole uncommitted
+        # transaction, not just the failed item's work.
+        monkeypatch.setattr(retrieval_module, "fetch_url", lambda url, **k: fake_response(RSS_TWO_ITEMS))
+
+        original_archive_and_save = retrieval_module._archive_and_save
+        calls = []
+
+        def flaky_archive_and_save(db, news_source, item):
+            calls.append(item.link)
+            if len(calls) == 1:
+                raise RuntimeError("simulated failure")
+            return original_archive_and_save(db, news_source, item)
+
+        monkeypatch.setattr(retrieval_module, "_archive_and_save", flaky_archive_and_save)
+
+        created = poll_news_source(db, news_source)
+
+        assert created == 1  # the second item still got created despite the first raising
+        assert len(calls) == 2  # both items were attempted
+
+    def test_caps_new_articles_per_poll(self, db, archive_root, monkeypatch):
+        monkeypatch.setattr(retrieval_module, "MAX_NEW_ARTICLES_PER_POLL", 1)
+        news_source = make_news_source(db, connector="google_news_proxy")
+        monkeypatch.setattr(retrieval_module, "fetch_url", lambda url, **k: fake_response(RSS_TWO_ITEMS))
+
+        created = poll_news_source(db, news_source)
+
+        assert created == 1
