@@ -26,6 +26,48 @@ logger = logging.getLogger(__name__)
 # the next poll (they're not yet in the DB, so they aren't skipped as dupes).
 MAX_NEW_ARTICLES_PER_POLL = 20
 
+# Google News's `site:` search (the google_news_proxy connector) indexes an
+# outlet's whole domain, not just its posts, so it can surface static
+# navigation/utility pages alongside real articles -- e.g. "Advertise - The
+# Fillmore Gazette" or "Santa Paula Times - Santa Paula Times" (the outlet's
+# own masthead page). Filter title patterns that are clearly not real
+# headlines: a short, generic site-chrome label, or a headline that repeats
+# the outlet's own name (something a real news headline essentially never
+# does). This is a heuristic, not exhaustive -- an outlet-specific section
+# front with an unrecognized label (e.g. a "Locales" section index) can
+# still slip through; the goal is cutting the clear majority of noise, not
+# perfect precision.
+NON_ARTICLE_TITLE_LABELS = {
+    "advertise",
+    "subscribe",
+    "copyright",
+    "help",
+    "suggestions",
+    "user agreement",
+    "news",
+    "obituaries",
+    "contact",
+    "contact us",
+    "about",
+    "about us",
+    "terms",
+    "terms of service",
+    "privacy",
+    "privacy policy",
+    "home",
+}
+
+
+def _looks_like_non_article(title: str, outlet_name: str) -> bool:
+    label = title
+    suffix = f" - {outlet_name}"
+    if label.lower().endswith(suffix.lower()):
+        label = label[: -len(suffix)]
+    label = label.strip().lower()
+    if label in NON_ARTICLE_TITLE_LABELS:
+        return True
+    return outlet_name.lower() in label
+
 
 def poll_news_source(db: Session, news_source: NewsSource) -> int:
     """Fetches news_source's feed, archives+classifies new items, updates
@@ -48,6 +90,8 @@ def poll_news_source(db: Session, news_source: NewsSource) -> int:
             break
         already_seen = db.query(NewsArticle.id).filter(NewsArticle.url == item.link).first()
         if already_seen:
+            continue
+        if _looks_like_non_article(item.title, news_source.name):
             continue
         try:
             _archive_and_save(db, news_source, item)

@@ -197,6 +197,52 @@ class TestWordpressRssContentEncoded:
         assert "Full article body text." in article.full_text
 
 
+RSS_WITH_NON_ARTICLE_NOISE = b"""<?xml version="1.0"?>
+<rss><channel>
+<item>
+  <title>Advertise - The Fillmore Gazette</title>
+  <link>https://example.invalid/advertise</link>
+  <description>desc</description>
+</item>
+<item>
+  <title>The Fillmore Gazette - The Fillmore Gazette</title>
+  <link>https://example.invalid/masthead</link>
+  <description>desc</description>
+</item>
+<item>
+  <title>Fillmore Middle School Campus Receives Facelift - The Fillmore Gazette</title>
+  <link>https://example.invalid/real-article</link>
+  <description>A real story about a real school.</description>
+</item>
+</channel></rss>"""
+
+
+class TestFilterNonArticleTitles:
+    def test_skips_blocklisted_utility_page_titles(self, db, archive_root, monkeypatch):
+        news_source = make_news_source(db, connector="google_news_proxy", name="The Fillmore Gazette")
+        monkeypatch.setattr(retrieval_module, "fetch_url", lambda url, **k: fake_response(RSS_WITH_NON_ARTICLE_NOISE))
+
+        created = poll_news_source(db, news_source)
+
+        assert created == 1
+        titles = {a.title for a in db.query(NewsArticle).all()}
+        assert titles == {"Fillmore Middle School Campus Receives Facelift - The Fillmore Gazette"}
+
+    def test_looks_like_non_article_matches_blocklist_after_stripping_outlet_suffix(self):
+        assert retrieval_module._looks_like_non_article("Advertise - The Fillmore Gazette", "The Fillmore Gazette")
+        assert retrieval_module._looks_like_non_article("Subscribe - Santa Paula Times", "Santa Paula Times")
+
+    def test_looks_like_non_article_matches_outlet_name_repeated_in_headline(self):
+        assert retrieval_module._looks_like_non_article(
+            "SANTA PAULA TIMES ETHICS/CORRECTIONS GUIDELINES - Santa Paula Times", "Santa Paula Times"
+        )
+
+    def test_looks_like_non_article_false_for_real_headline(self):
+        assert not retrieval_module._looks_like_non_article(
+            "Fillmore Middle School Campus Receives Facelift - The Fillmore Gazette", "The Fillmore Gazette"
+        )
+
+
 class TestPollNewsSourcePerItemIsolation:
     def test_one_bad_item_does_not_abort_the_whole_poll(self, db, archive_root, monkeypatch):
         news_source = make_news_source(db, connector="google_news_proxy")
