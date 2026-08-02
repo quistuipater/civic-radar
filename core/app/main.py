@@ -16,6 +16,7 @@ from app.routers import (
     logs,
     manual_submissions,
     meetings,
+    news,
     review,
     search,
     sources,
@@ -34,6 +35,7 @@ app.include_router(manual_submissions.router)
 app.include_router(digest.router)
 app.include_router(crime_incidents.router)
 app.include_router(logs.router)
+app.include_router(news.router)
 app.include_router(dashboard.router)
 
 app.mount("/archive", StaticFiles(directory=settings.archive_root), name="archive")

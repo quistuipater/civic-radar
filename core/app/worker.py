@@ -22,7 +22,8 @@ from app.ingestion.pipeline import ingest_source
 from app.ingestion.scc_planning_search import ingest_scc_planning_search
 from app.issue_matching import match_document_to_issue
 from app.log_handler import DbLogHandler, prune_app_logs
-from app.models import AiOutput, Document, Source
+from app.models import AiOutput, Document, NewsSource, Source
+from app.news.retrieval import poll_news_source
 from app.parsing.service import parse_document
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -156,10 +157,28 @@ def run_ai_batch() -> None:
         db.close()
 
 
+def run_news_batch() -> None:
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        news_sources = db.query(NewsSource).filter(NewsSource.enabled.is_(True)).all()
+        for news_source in news_sources:
+            if not is_due(news_source, now):
+                continue
+            try:
+                poll_news_source(db, news_source)
+            except Exception:
+                db.rollback()
+                logger.exception("news polling crashed for source %s", news_source.name)
+    finally:
+        db.close()
+
+
 def tick() -> None:
     run_ingestion_tick()
     run_parsing_batch()
     run_ai_batch()
+    run_news_batch()
     maybe_prune_app_logs()
 
 

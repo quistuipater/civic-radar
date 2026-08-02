@@ -17,7 +17,7 @@ import app.worker as worker_module
 from app.archive import now_utc
 from app.models import Document
 
-from .conftest import make_ai_output, make_document, make_source
+from .conftest import make_ai_output, make_document, make_news_source, make_source
 
 
 class TestIsDue:
@@ -253,17 +253,66 @@ class TestRunAiBatch:
         assert calls == ["Healthy Doc"]
 
 
+class TestRunNewsBatch:
+    def test_polls_due_news_sources(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        news_source = make_news_source(db, enabled=True)
+        db.commit()
+        calls = []
+        monkeypatch.setattr(worker_module, "poll_news_source", lambda db, ns: calls.append(ns.id) or 0)
+
+        worker_module.run_news_batch()
+
+        assert calls == [news_source.id]
+
+    def test_skips_not_due_news_sources(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        make_news_source(db, enabled=True, last_fetched_at=now_utc(), polling_interval_minutes=60)
+        db.commit()
+        calls = []
+        monkeypatch.setattr(worker_module, "poll_news_source", lambda db, ns: calls.append(ns.id) or 0)
+
+        worker_module.run_news_batch()
+
+        assert calls == []
+
+    def test_skips_disabled_news_sources(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        make_news_source(db, enabled=False)
+        db.commit()
+        calls = []
+        monkeypatch.setattr(worker_module, "poll_news_source", lambda db, ns: calls.append(ns.id) or 0)
+
+        worker_module.run_news_batch()
+
+        assert calls == []
+
+    def test_crash_is_caught_and_logged_without_source_id(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        make_news_source(db, enabled=True)
+        db.commit()
+
+        def raise_error(db, ns):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(worker_module, "poll_news_source", raise_error)
+
+        worker_module.run_news_batch()  # must not raise
+
+
 class TestTick:
-    def test_runs_all_three_batches_in_order(self, db_session_factory, monkeypatch):
+    def test_runs_all_batches_in_order(self, db_session_factory, monkeypatch):
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
         calls = []
         monkeypatch.setattr(worker_module, "run_ingestion_tick", lambda: calls.append("ingestion"))
         monkeypatch.setattr(worker_module, "run_parsing_batch", lambda: calls.append("parsing"))
         monkeypatch.setattr(worker_module, "run_ai_batch", lambda: calls.append("ai"))
+        monkeypatch.setattr(worker_module, "run_news_batch", lambda: calls.append("news"))
+        monkeypatch.setattr(worker_module, "maybe_prune_app_logs", lambda: calls.append("prune"))
 
         worker_module.tick()
 
-        assert calls == ["ingestion", "parsing", "ai"]
+        assert calls == ["ingestion", "parsing", "ai", "news", "prune"]
 
 
 class StopLoop(Exception):

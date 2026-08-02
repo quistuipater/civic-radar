@@ -228,3 +228,18 @@ class LogEntryOut(BaseModel):
     source_name: str | None
     summary: str
     detail: str | None
+
+
+# --- News ---
+
+
+class NewsArticleOut(BaseModel):
+    id: str
+    title: str
+    url: str
+    outlet_name: str
+    published_at: datetime | None
+    summary: str | None
+    topic_categories: list[str]
+    classification_method: str
+    classification_confidence: str
