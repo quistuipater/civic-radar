@@ -27,6 +27,8 @@ from app.models import (
     ManualSubmission,
     Meeting,
     MeetingTranscript,
+    NewsArticle,
+    NewsSource,
     Prompt,
     Source,
 )
@@ -303,6 +305,40 @@ def make_prompt(db, **overrides) -> Prompt:
     db.add(prompt)
     db.flush()
     return prompt
+
+
+def make_news_source(db, **overrides) -> NewsSource:
+    defaults = dict(
+        name="Test News Outlet",
+        outlet_url="https://example.invalid",
+        rss_feed_url="https://example.invalid/feed/",
+        connector="wordpress_rss",
+        polling_interval_minutes=60,
+    )
+    defaults.update(overrides)
+    news_source = NewsSource(**defaults)
+    db.add(news_source)
+    db.flush()
+    return news_source
+
+
+def make_news_article(db, news_source: NewsSource | None = None, **overrides) -> NewsArticle:
+    if news_source is None:
+        news_source = make_news_source(db)
+    defaults = dict(
+        news_source_id=news_source.id,
+        title="Test Article",
+        url=f"https://example.invalid/article-{uuid.uuid4().hex[:8]}",
+        summary="A test article summary.",
+        topic_categories=[],
+        classification_method="heuristic",
+        classification_confidence="low",
+    )
+    defaults.update(overrides)
+    article = NewsArticle(**defaults)
+    db.add(article)
+    db.flush()
+    return article
 
 
 def utcnow() -> datetime:

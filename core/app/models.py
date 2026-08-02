@@ -493,3 +493,55 @@ class AppLog(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     traceback: Mapped[str | None] = mapped_column(Text)
     source_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sources.id"), nullable=True)
+
+
+class NewsSource(Base):
+    """A monitored local news outlet's RSS feed. Wholly independent of
+    Source/Fetch/Document -- news coverage is context, not a reviewable
+    civic record, and this table intentionally carries none of the
+    gov-document-specific fields (APN, ordinance number, meeting date, ...)
+    that Source/Document have.
+    """
+
+    __tablename__ = "news_sources"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    outlet_url: Mapped[str] = mapped_column(Text, nullable=False)
+    rss_feed_url: Mapped[str] = mapped_column(Text, nullable=False)
+    connector: Mapped[str] = mapped_column(Text, nullable=False)  # "wordpress_rss" | "google_news_proxy"
+    polling_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    articles: Mapped[list["NewsArticle"]] = relationship(back_populates="news_source")
+
+
+class NewsArticle(Base):
+    """A single retrieved+classified news article. `full_text`/`archive_path`
+    are only ever populated when `news_source.connector == "wordpress_rss"`
+    -- see core/app/news/retrieval.py.
+    """
+
+    __tablename__ = "news_articles"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    news_source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("news_sources.id"))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    summary: Mapped[str | None] = mapped_column(Text)
+    full_text: Mapped[str | None] = mapped_column(Text)
+    archive_path: Mapped[str | None] = mapped_column(Text)
+    topic_categories: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    classification_method: Mapped[str] = mapped_column(Text, nullable=False)  # "heuristic" | "ai"
+    classification_confidence: Mapped[str] = mapped_column(Text, nullable=False)  # "low" | "medium" | "high"
+
+    news_source: Mapped["NewsSource"] = relationship(back_populates="articles")
