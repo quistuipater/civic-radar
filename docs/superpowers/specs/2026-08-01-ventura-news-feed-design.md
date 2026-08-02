@@ -197,9 +197,10 @@ class NewsArticleOut(BaseModel):
 ```
 
 `GET /api/news` query params: `topic` (category | `all`, default `all`),
-`source_id` (`NewsSource.id` | `all`, default `all`), `before` (cursor:
-`<published_at>,<id>`, for "Load more"), `limit` (default 50). No `after`
-param — no polling, so no need for a "newer than" cursor. Malformed
+`source_id` (`NewsSource.id` | `all`, default `all`), `before` (a plain ISO
+datetime string — same cursor shape `/api/logs` actually implements, not a
+composite pair, for "Load more"), `limit` (default 50). No `after` param —
+no polling, so no need for a "newer than" cursor. Malformed
 `before`/`source_id` → `400`, same pattern established in the Logs-tab fix
 round (never let a bad param produce an uncaught 500).
 
