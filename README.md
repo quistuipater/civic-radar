@@ -12,7 +12,7 @@ per-jurisdiction instantiations (`cities/ventura/`, `cities/santa_cruz/`,
 
 ## Quick start
 
-```bash
+~~~bash
 cd cities/santa_cruz   # or ventura, or boston
 cp .env.example .env
 docker compose up -d postgres
@@ -20,7 +20,7 @@ docker compose run --rm api python scripts/init_db.py
 docker compose run --rm api python scripts/seed_sources.py
 docker compose run --rm api python scripts/seed_prompts.py
 docker compose up -d api worker
-```
+~~~
 
 Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 `:8013`.
@@ -33,6 +33,9 @@ Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 - `cities/<city>/` — that city's seed data, Docker Compose project, `.env`,
   and README/CLAUDE.md. See `cities/<city>/README.md` for what's actually
   specific to that deployment (real sources, known gaps).
+- `docs/organization-tracker/` — requirements for the bounded module that
+  converts archived evidence into time-aware organizational state and reviewed
+  change events; Ventura is the MVP deployment.
 - `whisperx_service/` — standalone meeting-audio transcription service.
 - `prd.md` — the platform's product requirements document.
 - `EXPANSION_STRATEGY.md` — the planning notes behind the "city is the
