@@ -7,14 +7,81 @@
 <div class="panel">
   <p><strong>Original URL:</strong> {% if document.original_url %}<a class="link" href="{{ document.original_url }}" target="_blank">{{ document.original_url }}</a>{% else %}—{% endif %}</p>
   <p><strong>Local archive path:</strong> <a class="link" href="{{ document.archive_path }}" target="_blank">{{ document.archive_path }}</a></p>
-  <p><strong>Parser status:</strong> {{ document.parser_status }}{% if document.parser_error %} — <span class="muted">{{ document.parser_error }}</span>{% endif %}</p>
+  <p><strong>Parser status:</strong> {{ document.parser_status }}{% if document.parser_error %} — <span class="muted">{{ document.parser_error }}</span>{% endif %}
+    {% if document.ocr_method %}— <span class="muted">text via {{ document.ocr_method }}</span>{% endif %}
+  </p>
   <p><strong>Identifiers:</strong>
     {% if document.project_number %}Project {{ document.project_number }} {% endif %}
     {% if document.ordinance_number %}Ordinance {{ document.ordinance_number }} {% endif %}
     {% if document.resolution_number %}Resolution {{ document.resolution_number }} {% endif %}
     {% if not (document.project_number or document.ordinance_number or document.resolution_number) %}<span class="muted">none extracted</span>{% endif %}
   </p>
+  {% if document.needs_human_review %}
+  <p><span class="badge level-3">needs review</span> <span class="muted">text extracted by vision-model OCR (handwritten/low-quality scan) — verify against the source image (link above) before trusting it</span></p>
+  {% endif %}
 </div>
+
+<h2>Correct this document</h2>
+<div class="panel">
+  <form method="post" action="/documents/{{ document.id }}/edit">
+    <div class="grid">
+      <div>
+        <label>Title</label>
+        <input type="text" name="title" value="{{ document.title or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Document type</label>
+        <input type="text" name="document_type" value="{{ document.document_type or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Document date</label>
+        <input type="date" name="document_date" value="{{ document.document_date or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Meeting date</label>
+        <input type="date" name="meeting_date" value="{{ document.meeting_date or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Project number</label>
+        <input type="text" name="project_number" value="{{ document.project_number or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Ordinance number</label>
+        <input type="text" name="ordinance_number" value="{{ document.ordinance_number or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Resolution number</label>
+        <input type="text" name="resolution_number" value="{{ document.resolution_number or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>APN</label>
+        <input type="text" name="apn" value="{{ document.apn or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Applicant</label>
+        <input type="text" name="applicant" value="{{ document.applicant or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Address</label>
+        <input type="text" name="address" value="{{ document.address or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Public hearing date</label>
+        <input type="date" name="public_hearing_date" value="{{ document.public_hearing_date or '' }}" style="width:100%">
+      </div>
+      <div>
+        <label>Comment deadline</label>
+        <input type="date" name="comment_deadline" value="{{ document.comment_deadline or '' }}" style="width:100%">
+      </div>
+    </div>
+    <label>Extracted text <span class="muted">— editing this re-chunks/re-embeds the document and clears the "needs review" flag</span></label>
+    <textarea name="corrected_text" rows="16" style="width:100%; font-family: ui-monospace, monospace;">{{ extracted_text }}</textarea>
+    <div style="margin-top:0.75rem"><button type="submit">Save corrections</button></div>
+  </form>
+</div>
+<form method="post" action="/documents/{{ document.id }}/reparse-form" style="display:inline">
+  <button type="submit" class="secondary">Re-run parsing from source (discards edits above)</button>
+</form>
 
 <h2>AI outputs</h2>
 {% if ai_outputs %}

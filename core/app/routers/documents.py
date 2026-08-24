@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 from app.ai.classify import classify_document
 from app.ai.summarize import summarize_document
 from app.db import get_db
+from app.document_corrections import apply_document_corrections
 from app.issue_matching import match_document_to_issue, suggest_issues_for_document
 from app.models import AiOutput, Document
-from app.schemas import DocumentOut
+from app.schemas import DocumentOut, DocumentUpdate
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -33,6 +34,46 @@ def get_document(document_id: uuid.UUID, db: Session = Depends(get_db)):
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(status_code=404, detail="document not found")
+    return document
+
+
+@router.patch("/documents/{document_id}", response_model=DocumentOut)
+def update_document(document_id: uuid.UUID, payload: DocumentUpdate, db: Session = Depends(get_db)):
+    """Human corrections -- the parsing pipeline (Tesseract, regex field
+    extraction) is a first pass, not ground truth (see app/parsing/extract.py's
+    docstrings), and there's no automated way to know it got something wrong.
+    `corrected_text` is treated specially: it overwrites the .txt sidecar and
+    regenerates document_chunks (which embeddings/search/AI classification all
+    read from), not just a plain column update -- everything downstream of
+    parsing was built from the old text otherwise.
+    """
+    document = db.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+    corrected_text = updates.pop("corrected_text", None)
+    apply_document_corrections(db, document, updates, corrected_text)
+    db.refresh(document)
+    return document
+
+
+@router.post("/documents/{document_id}/reparse", response_model=DocumentOut)
+def reparse_document(document_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Resets parser_status so the worker's next run_parsing_batch() tick
+    re-runs parse_document() from scratch -- parse_document() no-ops on an
+    already-"parsed" document (see app/parsing/service.py), so this is the
+    only way to pick up a parsing-pipeline change (e.g. the vision-OCR
+    fallback) on a document parsed before that change existed, without
+    waiting for it to be re-discovered by a fresh fetch.
+    """
+    document = db.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="document not found")
+    document.parser_status = "pending"
+    document.parser_error = None
+    db.commit()
+    db.refresh(document)
     return document
 
 

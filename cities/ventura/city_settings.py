@@ -43,3 +43,10 @@ CRIME_AGENCY_CONFIG = {
         },
     },
 }
+
+# No CKAN-datastore permit/inspection feed has been identified for Ventura
+# (unlike Boston's data.boston.gov sources) -- empty, matching
+# app/city_config.py's own default, so app.ingestion.building_permits/
+# food_inspections's unconditional import in worker.py still resolves.
+BUILDING_PERMITS_CONFIG: dict = {}
+FOOD_INSPECTIONS_CONFIG: dict = {}

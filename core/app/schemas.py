@@ -72,9 +72,41 @@ class DocumentOut(ORMModel):
     project_number: str | None
     ordinance_number: str | None
     resolution_number: str | None
+    apn: str | None
+    applicant: str | None
+    address: str | None
+    public_hearing_date: date | None
+    comment_deadline: date | None
     parser_status: str
     parser_error: str | None
+    extracted_text_path: str | None
+    ocr_method: str | None
+    needs_human_review: bool
     created_at: datetime
+
+
+class DocumentUpdate(BaseModel):
+    """Human corrections to a parsed document. All fields optional/partial
+    (exclude_unset), same pattern as SourceUpdate. `corrected_text`, if
+    given, overwrites the extracted-text sidecar and re-chunks/re-embeds --
+    see routers/documents.py's update_document for why that's more than a
+    simple column assignment.
+    """
+
+    title: str | None = None
+    document_type: str | None = None
+    document_date: date | None = None
+    meeting_date: date | None = None
+    project_number: str | None = None
+    ordinance_number: str | None = None
+    resolution_number: str | None = None
+    apn: str | None = None
+    applicant: str | None = None
+    address: str | None = None
+    public_hearing_date: date | None = None
+    comment_deadline: date | None = None
+    corrected_text: str | None = None
+    needs_human_review: bool | None = None
 
 
 # --- Meetings / Agenda Items ---

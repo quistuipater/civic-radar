@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ollama_triage_model: str = "llama3.1:8b"
     ollama_analysis_model: str = "llama3.1:8b"
     ollama_embedding_model: str = "nomic-embed-text"
+    # Vision-capable fallback for OCR pages Tesseract scores low-confidence on
+    # (e.g. handwritten forms) -- see app/parsing/extract.py's _ocr_page.
+    ollama_vision_model: str = "gemma4:12b"
 
     whisperx_base_url: str = "http://madhatter.local:8091"
 

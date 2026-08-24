@@ -9,9 +9,11 @@ from app.db import SessionLocal
 from app.log_handler import DbLogHandler
 from app.routers import (
     alerts,
+    building_permits,
     crime_incidents,
     digest,
     documents,
+    food_inspections,
     issues,
     logs,
     manual_submissions,
@@ -34,6 +36,8 @@ app.include_router(search.router)
 app.include_router(manual_submissions.router)
 app.include_router(digest.router)
 app.include_router(crime_incidents.router)
+app.include_router(building_permits.router)
+app.include_router(food_inspections.router)
 app.include_router(logs.router)
 app.include_router(news.router)
 app.include_router(dashboard.router)

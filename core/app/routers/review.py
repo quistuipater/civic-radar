@@ -23,6 +23,13 @@ def review_queue(db: Session = Depends(get_db)):
     parser_failures = (
         db.query(Document).filter(Document.parser_status == "failed").order_by(Document.created_at.desc()).limit(50).all()
     )
+    vision_ocr_pending_review = (
+        db.query(Document)
+        .filter(Document.needs_human_review.is_(True))
+        .order_by(Document.created_at.desc())
+        .limit(50)
+        .all()
+    )
     source_failures = (
         db.query(Source).filter(Source.consecutive_failures >= 3).order_by(Source.consecutive_failures.desc()).all()
     )
@@ -39,6 +46,16 @@ def review_queue(db: Session = Depends(get_db)):
         "extraction_errors": [
             {"id": d.id, "title": d.title, "archive_path": d.archive_path, "parser_error": d.parser_error}
             for d in parser_failures
+        ],
+        "vision_ocr_pending_review": [
+            {
+                "id": d.id,
+                "title": d.title,
+                "archive_path": d.archive_path,
+                "ocr_method": d.ocr_method,
+                "note": "text extracted by vision-model OCR (handwritten/low-quality scan) -- verify against source image before trusting",
+            }
+            for d in vision_ocr_pending_review
         ],
         "source_failures": [
             {"id": s.id, "name": s.name, "consecutive_failures": s.consecutive_failures, "last_error": s.last_error}

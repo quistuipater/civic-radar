@@ -13,3 +13,8 @@ the same way ./backend:/app already bind-mounts the whole app tree.
 """
 
 CRIME_AGENCY_CONFIG: dict = {}
+
+# Same shape/rationale as CRIME_AGENCY_CONFIG, for the CKAN-datastore-backed
+# structured feeds in app/ingestion/ckan_datastore.py. Keyed by Source.agency.
+BUILDING_PERMITS_CONFIG: dict = {}
+FOOD_INSPECTIONS_CONFIG: dict = {}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Documents — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Documents <span class="muted">({{ total }})</span></h1>
+
+<div class="panel">
+  <form method="get" action="/documents" class="grid">
+    <div>
+      <label>Parser status</label>
+      <select name="parser_status">
+        <option value="">any</option>
+        {% for s in ("parsed", "pending", "failed", "skipped") %}
+        <option value="{{ s }}" {{ "selected" if filters.parser_status == s else "" }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Document type</label>
+      <select name="document_type">
+        <option value="">any</option>
+        {% for t in document_types %}
+        <option value="{{ t }}" {{ "selected" if filters.document_type == t else "" }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Jurisdiction</label>
+      <select name="jurisdiction">
+        <option value="">any</option>
+        {% for j in jurisdictions %}
+        <option value="{{ j }}" {{ "selected" if filters.jurisdiction == j else "" }}>{{ j }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Needs review</label>
+      <select name="needs_review">
+        <option value="">any</option>
+        <option value="yes" {{ "selected" if filters.needs_review == "yes" else "" }}>yes only</option>
+      </select>
+    </div>
+    <div style="align-self:end">
+      <button type="submit">Filter</button>
+      <a class="link" href="/documents" style="margin-left:0.75rem">clear</a>
+    </div>
+  </form>
+</div>
+
+{% if documents %}
+<table>
+  <tr><th>Title</th><th>Type</th><th>Jurisdiction</th><th>Status</th><th>Flags</th><th>Created</th></tr>
+  {% for d in documents %}
+  <tr>
+    <td><a class="link" href="/documents/{{ d.id }}">{{ d.title or '(untitled)' }}</a></td>
+    <td class="muted">{{ d.document_type }}</td>
+    <td class="muted">{{ d.jurisdiction }}</td>
+    <td>
+      {% if d.parser_status == 'parsed' %}<span class="badge level-1">parsed</span>
+      {% elif d.parser_status == 'failed' %}<span class="badge level-4">failed</span>
+      {% elif d.parser_status == 'pending' %}<span class="badge level-2">pending</span>
+      {% else %}<span class="muted">{{ d.parser_status }}</span>{% endif %}
+    </td>
+    <td>{% if d.needs_human_review %}<span class="badge level-3">needs review</span>{% endif %}</td>
+    <td class="muted">{{ d.created_at.strftime('%Y-%m-%d %H:%M') if d.created_at else '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<div class="muted" style="margin-bottom:1.5rem">
+  Page {{ page }} of {{ total_pages }}
+  {% if page > 1 %}<a class="link" href="?{% for k, v in filters.items() %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page - 1 }}" style="margin-left:0.75rem">previous</a>{% endif %}
+  {% if page < total_pages %}<a class="link" href="?{% for k, v in filters.items() %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page + 1 }}" style="margin-left:0.75rem">next</a>{% endif %}
+</div>
+{% else %}
+<p class="empty">No documents match these filters.</p>
+{% endif %}
+{% endblock %}

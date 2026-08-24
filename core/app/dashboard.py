@@ -5,7 +5,8 @@ local without a build step.
 
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 from dateutil import parser as dateutil_parser
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.ai.classify import classify_document
 from app.config import settings
 from app.db import get_db
+from app.document_corrections import apply_document_corrections
 from app.export.digest import DEFAULT_WINDOW_HOURS, build_daily_digest
 from app.issue_matching import suggest_issues_for_document
 from app.models import (
@@ -116,6 +118,71 @@ def logs_page(request: Request, db: Session = Depends(get_db)):
 def news_page(request: Request, db: Session = Depends(get_db)):
     news_sources = db.query(NewsSource).order_by(NewsSource.name).all()
     return templates.TemplateResponse("news.html", {"request": request, "news_sources": news_sources})
+
+
+DOCUMENTS_PAGE_SIZE = 50
+
+
+@router.get("/documents")
+def documents_list_page(
+    request: Request,
+    parser_status: str = "",
+    document_type: str = "",
+    jurisdiction: str = "",
+    needs_review: str = "",
+    page: int = 1,
+    db: Session = Depends(get_db),
+):
+    """Full browse/search over every archived document -- the home page's
+    "recent documents" widget only shows the latest 20 and there was
+    previously no other way to reach a document once it aged off that list
+    except a direct /documents/{id} link or the API (confirmed live
+    2026-08-23: a real failed-to-parse document had no path to it in the UI
+    at all). This is deliberately the comprehensive view: unlike
+    /review-queue (exception-only, capped at 50 per category), this covers
+    every document regardless of status, with filters to narrow down.
+    """
+    query = db.query(Document).filter(Document.document_type != "source_page_snapshot")
+    if parser_status:
+        query = query.filter(Document.parser_status == parser_status)
+    if document_type:
+        query = query.filter(Document.document_type == document_type)
+    if jurisdiction:
+        query = query.filter(Document.jurisdiction == jurisdiction)
+    if needs_review == "yes":
+        query = query.filter(Document.needs_human_review.is_(True))
+
+    total = query.count()
+    page = max(1, page)
+    documents = (
+        query.order_by(Document.created_at.desc())
+        .offset((page - 1) * DOCUMENTS_PAGE_SIZE)
+        .limit(DOCUMENTS_PAGE_SIZE)
+        .all()
+    )
+
+    document_types = [r[0] for r in db.query(Document.document_type).distinct().order_by(Document.document_type).all() if r[0]]
+    jurisdictions = [r[0] for r in db.query(Document.jurisdiction).distinct().order_by(Document.jurisdiction).all() if r[0]]
+
+    return templates.TemplateResponse(
+        "documents_list.html",
+        {
+            "request": request,
+            "documents": documents,
+            "total": total,
+            "page": page,
+            "page_size": DOCUMENTS_PAGE_SIZE,
+            "total_pages": max(1, (total + DOCUMENTS_PAGE_SIZE - 1) // DOCUMENTS_PAGE_SIZE),
+            "document_types": document_types,
+            "jurisdictions": jurisdictions,
+            "filters": {
+                "parser_status": parser_status,
+                "document_type": document_type,
+                "jurisdiction": jurisdiction,
+                "needs_review": needs_review,
+            },
+        },
+    )
 
 
 @router.get("/review-queue")
@@ -341,6 +408,12 @@ def document_detail_page(document_id: uuid.UUID, request: Request, db: Session =
     issue_links = [(link, issue) for link, issue in issue_links if issue is not None]
     all_issues = db.query(Issue).order_by(Issue.title).all()
     suggested_issues = suggest_issues_for_document(db, document)
+    extracted_text = ""
+    if document.extracted_text_path:
+        try:
+            extracted_text = Path(document.extracted_text_path).read_text()
+        except OSError:
+            pass
     return templates.TemplateResponse(
         "document_detail.html",
         {
@@ -350,8 +423,77 @@ def document_detail_page(document_id: uuid.UUID, request: Request, db: Session =
             "issue_links": issue_links,
             "all_issues": all_issues,
             "suggested_issues": suggested_issues,
+            "extracted_text": extracted_text,
         },
     )
+
+
+@router.post("/documents/{document_id}/edit")
+def edit_document_form(
+    document_id: uuid.UUID,
+    title: str = Form(""),
+    document_type: str = Form(""),
+    document_date: str = Form(""),
+    meeting_date: str = Form(""),
+    project_number: str = Form(""),
+    ordinance_number: str = Form(""),
+    resolution_number: str = Form(""),
+    apn: str = Form(""),
+    applicant: str = Form(""),
+    address: str = Form(""),
+    public_hearing_date: str = Form(""),
+    comment_deadline: str = Form(""),
+    corrected_text: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Human-correction form -- see app/document_corrections.py, shared with
+    the REST API's PATCH /api/documents/{id} so the two never drift on what
+    "correcting a document" actually does (rewriting the text sidecar,
+    re-chunking, clearing needs_human_review, etc).
+    """
+    document = db.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    date_fields = {
+        "document_date": document_date,
+        "meeting_date": meeting_date,
+        "public_hearing_date": public_hearing_date,
+        "comment_deadline": comment_deadline,
+    }
+    text_fields = {
+        "title": title,
+        "document_type": document_type,
+        "project_number": project_number,
+        "ordinance_number": ordinance_number,
+        "resolution_number": resolution_number,
+        "apn": apn,
+        "applicant": applicant,
+        "address": address,
+    }
+    updates: dict = {}
+    for key, value in date_fields.items():
+        if value:
+            updates[key] = date.fromisoformat(value)
+    for key, value in text_fields.items():
+        if value:
+            updates[key] = value
+
+    apply_document_corrections(db, document, updates, corrected_text or None)
+    return RedirectResponse(url=f"/documents/{document_id}", status_code=303)
+
+
+@router.post("/documents/{document_id}/reparse-form")
+def reparse_document_form(document_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Form-friendly wrapper around the same reset routers/documents.py's
+    POST /api/documents/{id}/reparse does -- see that endpoint's docstring.
+    """
+    document = db.get(Document, document_id)
+    if document:
+        document.parser_status = "pending"
+        document.parser_error = None
+        db.commit()
+    return RedirectResponse(url=f"/documents/{document_id}", status_code=303)
 
 
 @router.post("/documents/{document_id}/classify")

@@ -14,7 +14,9 @@ from app.ai.pipeline import CLASSIFIABLE_TYPES, run_ai_pipeline
 from app.alerting import create_alert_from_classification
 from app.config import settings
 from app.db import SessionLocal
+from app.ingestion.building_permits import ingest_building_permits
 from app.ingestion.crime_data import ingest_crime_source
+from app.ingestion.food_inspections import ingest_food_inspections
 from app.ingestion.legistar import ingest_legistar
 from app.ingestion.meeting_audio import ingest_meeting_audio
 from app.ingestion.onbase_agenda import ingest_onbase_agenda
@@ -68,6 +70,8 @@ def _bespoke_ingestors() -> dict:
     """
     return {
         "arcgis_feature_query": ingest_crime_source,
+        "ckan_datastore_permits": ingest_building_permits,
+        "ckan_datastore_food_inspections": ingest_food_inspections,
         "granicus_podcast_rss": ingest_meeting_audio,
         "onbase_agenda_online": ingest_onbase_agenda,
         "scc_planning_search": ingest_scc_planning_search,

@@ -118,6 +118,16 @@ class Document(Base):
     parser_status: Mapped[str] = mapped_column(Text, default="pending")
     parser_error: Mapped[str | None] = mapped_column(Text)
     extracted_text_path: Mapped[str | None] = mapped_column(Text)
+    # Set by parse_document() when any page's text came from the vision-OCR
+    # fallback (app/parsing/extract.py) rather than embedded PDF text or
+    # Tesseract. needs_human_review defaults true in that case -- confirmed
+    # live 2026-08-18 that vision-OCR'd text can be fluently, confidently
+    # wrong (a handwritten name misread as a different, equally plausible
+    # real name), which is worse to silently trust than Tesseract's
+    # obviously-garbled output ever was. Cleared via PATCH /api/documents/
+    # {id} once a human has checked it against the source image.
+    ocr_method: Mapped[str | None] = mapped_column(Text)
+    needs_human_review: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -475,6 +485,70 @@ class CrimeIncident(Base):
     )
 
     __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_crime_incident_source_external"),)
+
+
+class BuildingPermit(Base):
+    """A single permit record from a municipal open-data CKAN feed (e.g.
+    Analyze Boston's Approved Building Permits dataset) -- same rationale as
+    CrimeIncident: a structured row per permit, no PDF/HTML to archive-then-
+    parse, so it gets its own table rather than the Document pipeline.
+    """
+
+    __tablename__ = "building_permits"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sources.id"))
+    external_id: Mapped[str] = mapped_column(Text, nullable=False)
+    permit_type: Mapped[str | None] = mapped_column(Text)
+    work_type: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    applicant: Mapped[str | None] = mapped_column(Text)
+    declared_valuation: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
+    ward: Mapped[str | None] = mapped_column(Text)
+    issued_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expiration_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_attributes: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_building_permit_source_external"),)
+
+
+class FoodInspection(Base):
+    """A single inspection/violation line item from a municipal health-code
+    open-data CKAN feed (e.g. Analyze Boston's Food Establishment
+    Inspections dataset). One row per violation cited during an inspection
+    visit -- there is no separate "violations" dataset upstream, the
+    inspections feed already carries violation code/description/status per
+    row (see core/app/ingestion/food_inspections.py docstring).
+    """
+
+    __tablename__ = "food_inspections"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sources.id"))
+    external_id: Mapped[str] = mapped_column(Text, nullable=False)
+    business_name: Mapped[str | None] = mapped_column(Text)
+    license_number: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[str | None] = mapped_column(Text)
+    violation_code: Mapped[str | None] = mapped_column(Text)
+    violation_level: Mapped[str | None] = mapped_column(Text)
+    violation_description: Mapped[str | None] = mapped_column(Text)
+    violation_status: Mapped[str | None] = mapped_column(Text)
+    comments: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
+    violation_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_attributes: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_food_inspection_source_external"),)
 
 
 class AppLog(Base):

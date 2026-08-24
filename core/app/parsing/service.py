@@ -16,7 +16,22 @@ logger = logging.getLogger(__name__)
 # document stuck mid-parse is never committed and gets retried every tick.
 # Only safe to use here: parse_document() is only ever called from the
 # worker's main thread (see app/worker.py), and signal.alarm requires that.
-PARSE_TIMEOUT_SECONDS = 120
+# Must stay comfortably above app/parsing/extract.py's worst case: a fully
+# scanned document (every page needs OCR, e.g. a scanned-only minutes PDF)
+# spends MAX_VISION_OCR_PAGES_PER_DOCUMENT (3) attempts at
+# VISION_OCR_TIMEOUT_SECONDS (150s) each (~450s if all three time out) plus
+# up to MAX_OCR_PAGES_PER_DOCUMENT - 3 (37) remaining pages through
+# Tesseract-only OCR (rasterize + tesseract, seen live at up to ~10s/page,
+# ~370s). Confirmed live 2026-08-23 on a real 25-page, fully-scanned Ventura
+# minutes document (every page needed OCR) that 600s wasn't enough headroom
+# for that worst case even though the page caps bound it -- raised to 900s.
+# Before the per-document vision-attempt cap existed, a packet with more
+# than a couple of scanned pages would blow any PARSE_TIMEOUT_SECONDS value
+# no matter how high, since cost scaled with page count rather than being
+# bounded -- raising this alone was never going to fix that class of
+# document, hence the cap in extract.py plus this bump (worst case is now
+# bounded regardless of how large the packet is).
+PARSE_TIMEOUT_SECONDS = 900
 
 
 class _ParseTimeout(Exception):
@@ -62,6 +77,10 @@ def parse_document(db: Session, document: Document) -> None:
     text_path = path.with_suffix(path.suffix + ".txt")
     text_path.write_text(parsed.full_text)
     document.extracted_text_path = str(text_path)
+
+    if parsed.used_vision_ocr:
+        document.ocr_method = "vision_fallback"
+        document.needs_human_review = True
 
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).delete()
     for chunk in chunk_pages(parsed):

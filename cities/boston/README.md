@@ -90,6 +90,15 @@ filing officers the way NetFile-based sources have served both prior forks.
   `text/html` content directly (no bespoke ingestion function needed). Low
   volume by nature, not a sign of a broken connector. Live run: **1 new
   notice** ("Board of Election Commissioners Meeting").
+- **Analyze Boston — Building Permits & Food Establishment Inspections**
+  (`app/ingestion/building_permits.py`, `app/ingestion/food_inspections.py`,
+  new; both built on the new generic `app/ingestion/ckan_datastore.py`
+  pager, since `data.boston.gov` is CKAN — the `datastore_search_sql` API,
+  not ArcGIS or a filing-officer platform). Bulk `INSERT ... ON CONFLICT DO
+  NOTHING` upsert, chunked, because CKAN's `OFFSET` pagination can return the
+  same row at non-adjacent offsets under concurrent writes to the source
+  dataset — a plain per-row insert crashed 520k rows into a first sync.
+  First full syncs: **660,079 building permits, 896,379 food inspections**.
 
 **Generic engine (carried over from Ventura Civic Radar, unchanged):**
 - **Ingestion connectors**, reusable by any future source without new code:

@@ -45,6 +45,7 @@ bespoke connector modules themselves already live in `core/app/ingestion/`
 | County/board agendas | PrimeGov (BOS + Planning Commission share one platform) | PrimeGov for BOS; a legacy classic-ASP search tool for Planning Commission — bespoke connector (`scc_planning_search.py`) | Zoning Board of Appeal via the same Legistar module as City Council (different `BodyId`) — pure config |
 | Campaign finance | NetFile (generic connector) | NetFile, county (`SCCO`) + city (`CRUZ`) — 4 feeds | Massachusetts OCPF — bespoke connector (`ocpf.py`), JSON API |
 | Crime data | Ventura PD + VC Sheriff via ArcGIS — `cities/ventura/city_settings.py` | Investigated, not found — city/county only publish jurisdiction-boundary layers, no incidents | Boston PD via ArcGIS — `cities/boston/city_settings.py` |
+| Building permits / food inspections | Not sourced | Not sourced | Analyze Boston (`data.boston.gov`) via the CKAN Datastore API — generic `ckan_datastore.py` connector, bulk upsert |
 | Elections/notices | NetFile-adjacent; bot-walled (AWS WAF) | County Elections Division (generic connector, no bot wall here) | Bespoke connector (`boston_public_notices.py`) — each notice is its own HTML page, not a linked PDF |
 | Meeting audio | Working (Granicus podcast feed populated) | Not usable — county's podcast feed returns zero items, both video streams CloudFront-gated | Not usable — podcast feed *is* populated, but audio files are CloudFront-gated (403 even with matching Referer) |
 
@@ -105,6 +106,8 @@ core/                    the engine — one Python package, shared by every city
                                ocpf.py, boston_public_notices.py
       onbase_agenda.py, scc_planning_search.py, legistar.py   bespoke, session-stateful connectors
       crime_data.py, arcgis_feature_service.py, meeting_audio.py
+      ckan_datastore.py       generic CKAN Datastore API pager (used by building_permits.py,
+                               food_inspections.py — currently Boston-only, inert elsewhere)
     parsing/, routers/, templates/    one shared template set — branding comes from Settings
   scripts/                init_db.py, seed_prompts.py, ingest_manual_document.py, backfill_*.py
   tests/                  ~35 shared test modules + conftest.py
@@ -159,7 +162,9 @@ Pipeline shape, source to dashboard — identical across instantiations:
 
 ```
 official source → fetch → raw archive (hash + store)
-  → parse (PDF/HTML text, page/section structure)
+  → parse (PDF/HTML text, page/section structure; scanned/handwritten pages
+    fall back to Tesseract, then a local vision model for a bounded number
+    of pages per document — see "OCR and human correction" below)
   → structured extraction (dates, project/ordinance numbers, deadlines)
   → embeddings + AI classification/summarization
   → issue matching (exact-identifier auto-link, or fuzzy semantic
@@ -167,6 +172,24 @@ official source → fetch → raw archive (hash + store)
   → alert scoring (levels 1-4)
   → review queue → dashboard
 ```
+
+**OCR and human correction.** Pages with no embedded text (scanned or
+handwritten originals) go through `_ocr_page()` in
+`core/app/parsing/extract.py`: the local vision model is tried first (not
+Tesseract's own confidence score — confirmed live that Tesseract can be
+88% "confident" about a completely misread handwritten page), capped at
+`MAX_VISION_OCR_PAGES_PER_DOCUMENT` (3) attempts per document so a packet
+with many scanned pages can't blow the parse-timeout budget; remaining OCR
+pages (up to `MAX_OCR_PAGES_PER_DOCUMENT`, 40) fall back to Tesseract only.
+Any document where vision OCR was used gets `needs_human_review = True` —
+confirmed live that vision-model transcription can be fluently, confidently
+*wrong* (a handwritten name misread as a different plausible-looking name)
+in a way Tesseract's obviously-garbled output never is, so it's treated as
+unverified until a human checks it. A document's detail page has a
+"Correct this document" panel to fix any field or the extracted text
+directly (re-chunks/re-embeds and clears the review flag), plus a
+"re-run parsing from source" button to pick up a pipeline change on an
+already-parsed document.
 
 Port numbers (8010/8012/8013 for dashboard, similarly offset Postgres/Ollama
 ports in each `docker-compose.yml`) are deliberately staggered so all three
@@ -218,12 +241,19 @@ Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 
 **In the dashboard:**
 
-- **Home** — recent activity across all sources.
+- **Home** — recent activity across all sources (the 20 most recently
+  created documents; use **Documents** for the full archive).
+- **Documents** — every archived document, filterable by parser status,
+  document type, jurisdiction, and needs-review, paginated. The
+  comprehensive browse/search view — unlike Home's 20-item recency list or
+  the Review Queue's exception-only, capped categories, this is where a
+  document that aged off both of those can still be found.
 - **Daily Digest** — top changes, upcoming hearings/votes, new notices,
   items needing review, approaching deadlines, in one page (also available
   as Markdown at `/api/digest/daily.md`).
 - **Review Queue** — high-priority alerts awaiting approve/reject, documents
-  that failed parsing, sources with repeated fetch failures, and unverified
+  that failed parsing, documents flagged for review because vision-model OCR
+  was used on them, sources with repeated fetch failures, and unverified
   social/manual submissions.
 - **Sources** — the registry of monitored feeds and their fetch health.
 - **Issues** — the tracked civic matters; create one manually, watch
@@ -246,6 +276,7 @@ and linked/suggested issues.
 docker compose up -d ollama
 docker compose exec ollama ollama pull llama3.1:8b   # Ventura also needs qwen3:8b
 docker compose exec ollama ollama pull nomic-embed-text
+docker compose exec ollama ollama pull gemma4:12b    # vision OCR fallback for scanned/handwritten pages
 ```
 
 Without Ollama running, classification still works via a deterministic
@@ -287,6 +318,14 @@ out to be bot-walled.
 - **Run the Santa Cruz/Boston `reviewed`/`operator_note` migration** and
   confirm the acknowledge-AI-output route works end-to-end on both — it's
   new behavior for those two cities as of this reorg (see "History" above).
+- **Shared Ollama contention across cities.** All three instantiations now
+  point at one native Ollama instance on `madhatter` (see each city's
+  `docker-compose.yml`/`.env`). Confirmed live 2026-08-22/23 that concurrent
+  vision-OCR calls from multiple cities' workers can starve each other (and
+  once, the Ollama service itself hung entirely — GPU idle, unresponsive to
+  a trivial request — requiring a host-level `systemctl restart ollama`).
+  Worth a real fix (request queuing/serialization, or per-city scheduling)
+  if this keeps recurring rather than restarting the service reactively.
 - **Standardize what "pure config" vs. "new connector" means** as a
   documented decision framework, now that three cities have each made this
   call independently — would make onboarding a fourth jurisdiction faster

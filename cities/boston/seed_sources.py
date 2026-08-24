@@ -165,6 +165,53 @@ SOURCES: list[dict] = [
             "broken connector."
         ),
     ),
+    dict(
+        name="Boston Inspectional Services Department — Approved Building Permits",
+        jurisdiction="City of Boston",
+        agency="Inspectional Services Department",
+        body=None,
+        source_type="permit_feed",
+        authority_level="official_primary",
+        url="https://data.boston.gov/api/3/action/datastore_search_sql?resource_id=6ddcd912-32a0-43df-9908-63574f8c7e77",
+        fetch_method="ckan_datastore_permits",
+        connector="none",
+        polling_interval_minutes=1440,
+        parser_type="ckan_datastore_permits",
+        notes=(
+            "Confirmed live 2026-08-15: Analyze Boston's (data.boston.gov) "
+            "CKAN-datastore-backed Approved Building Permits dataset, updated "
+            "daily, back to 2009. Same 'structured feed, own table' shape as "
+            "crime_data.py -- see app/ingestion/building_permits.py and "
+            "app/ingestion/ckan_datastore.py (a new CKAN datastore_search_sql "
+            "fetcher, same role as arcgis_feature_service.py for ArcGIS "
+            "sources). issued_date used as the incremental-sync cursor."
+        ),
+    ),
+    dict(
+        name="Boston Public Health Commission — Food Establishment Inspections",
+        jurisdiction="City of Boston",
+        agency="Boston Public Health Commission",
+        body=None,
+        source_type="inspection_feed",
+        authority_level="official_primary",
+        url="https://data.boston.gov/api/3/action/datastore_search_sql?resource_id=4582bec6-2b4f-4f9e-bc55-cbaa73117f4c",
+        fetch_method="ckan_datastore_food_inspections",
+        connector="none",
+        polling_interval_minutes=1440,
+        parser_type="ckan_datastore_food_inspections",
+        notes=(
+            "Confirmed live 2026-08-15: same Analyze Boston CKAN platform as "
+            "the building-permits source above, different dataset (resource "
+            "id 4582bec6-...). One row per violation cited during an "
+            "inspection visit -- there is no separate 'violations' dataset "
+            "upstream, this feed already carries violation code/description/"
+            "status per row. Updated daily, back to 2006. violdttm used as "
+            "the incremental-sync cursor; rows with no cited violation (a "
+            "clean pass) have a null violdttm and so are only ever picked up "
+            "on the initial full sync, not incrementally -- acceptable, "
+            "same class of caveat as VC Sheriff's full-refresh crime source."
+        ),
+    ),
 ]
 
 

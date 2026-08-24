@@ -30,6 +30,25 @@ def generate_json(model: str, prompt: str, timeout: float = 120.0) -> tuple[dict
         return None, f"model returned invalid JSON: {exc}"
 
 
+def generate_vision(model: str, prompt: str, image_b64: str, timeout: float = 120.0) -> tuple[str | None, str | None]:
+    """Returns (transcribed_text_or_None, error_message_or_None). Same
+    degrade-on-failure contract as generate_json -- a vision-model outage
+    must not take down OCR, only fall back to whatever Tesseract already
+    produced (see app/parsing/extract.py's _ocr_page).
+    """
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json={"model": model, "prompt": prompt, "images": [image_b64], "stream": False},
+            )
+            resp.raise_for_status()
+            text = resp.json().get("response", "")
+            return (text if text.strip() else None), None
+    except httpx.HTTPError as exc:
+        return None, f"ollama vision request failed: {exc}"
+
+
 def embed(model: str, text: str, timeout: float = 60.0) -> tuple[list[float] | None, str | None]:
     try:
         with httpx.Client(timeout=timeout) as client:
