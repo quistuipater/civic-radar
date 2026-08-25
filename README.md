@@ -33,6 +33,9 @@ Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 - `cities/<city>/` — that city's seed data, Docker Compose project, `.env`,
   and README/CLAUDE.md. See `cities/<city>/README.md` for what's actually
   specific to that deployment (real sources, known gaps).
+- `docs/organization-tracker/` — requirements for the bounded module that
+  converts archived evidence into time-aware organizational state and reviewed
+  change events; Ventura is the MVP deployment.
 - `whisperx_service/` — standalone meeting-audio transcription service.
 - `prd.md` — the platform's product requirements document.
 - `EXPANSION_STRATEGY.md` — the planning notes behind the "city is the
