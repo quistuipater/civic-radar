@@ -313,6 +313,30 @@ SOURCES = [
             "description)."
         ),
     ),
+    dict(
+        name="Ventura County Fairgrounds (31st DAA) — Meeting Notices",
+        jurisdiction="Ventura County",
+        agency="31st District Agricultural Association (Ventura County Fairgrounds)",
+        body="Board of Directors",
+        source_type="meeting_body_page",
+        authority_level="official_primary",
+        url="https://venturacountyfair.org/meeting-notices/",
+        fetch_method="html_pdf_harvest",
+        connector="generic",
+        polling_interval_minutes=1440,
+        parser_type="generic_pdf_harvest",
+        notes=(
+            "State entity (32nd/31st DAA numbering varies by source, but the "
+            "fairgrounds' own site self-identifies as the 31st DAA), so its Board "
+            "meets under Bagley-Keene rather than the Brown Act -- same archive "
+            "shape either way. Single WordPress page lists agendas, board packets, "
+            "minutes, RFP/IFB bid notices, and other public notices, grouped by "
+            "month back through at least 2024, ~111 directly-linked PDFs verified "
+            "live 2026-08-24, no bot wall (robots.txt Disallow: is empty, plain "
+            "GET returns 200), no pagination needed since the one page covers the "
+            "full history. Pure config against the existing generic PDF harvester."
+        ),
+    ),
 ]
 
 
