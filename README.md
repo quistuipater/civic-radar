@@ -12,7 +12,7 @@ per-jurisdiction instantiations (`cities/ventura/`, `cities/santa_cruz/`,
 
 ## Quick start
 
-~~~bash
+```bash
 cd cities/santa_cruz   # or ventura, or boston
 cp .env.example .env
 docker compose up -d postgres
@@ -20,7 +20,7 @@ docker compose run --rm api python scripts/init_db.py
 docker compose run --rm api python scripts/seed_sources.py
 docker compose run --rm api python scripts/seed_prompts.py
 docker compose up -d api worker
-~~~
+```
 
 Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 `:8013`.
