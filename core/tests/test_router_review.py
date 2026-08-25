@@ -51,6 +51,7 @@ class TestReviewQueue:
         assert body == {
             "high_priority_alerts": [],
             "extraction_errors": [],
+            "vision_ocr_pending_review": [],
             "source_failures": [],
             "social_unverified": [],
         }

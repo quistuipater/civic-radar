@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app import models  # noqa: F401  (registers models on Base.metadata)
 from app.db import Base, engine
+from app.organization_tracker import models as org_tracker_models  # noqa: F401
 
 
 def main() -> None:

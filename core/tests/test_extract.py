@@ -113,7 +113,9 @@ class TestParsePdf:
     def test_text_native_pages_do_not_trigger_ocr(self, tmp_path, monkeypatch):
         install_fake_pdfplumber(monkeypatch, [FakePage("Real embedded text")])
         ocr_calls = []
-        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n: ocr_calls.append(n) or "")
+        monkeypatch.setattr(
+            extract_module, "_ocr_page", lambda path, n, allow_vision=True: (ocr_calls.append(n), ("", False))[1]
+        )
 
         result = extract_module._parse_pdf(tmp_path / "doc.pdf")
 
@@ -122,7 +124,9 @@ class TestParsePdf:
 
     def test_page_with_no_embedded_text_falls_back_to_ocr(self, tmp_path, monkeypatch):
         install_fake_pdfplumber(monkeypatch, [FakePage("")])
-        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n: "OCR recovered text")
+        monkeypatch.setattr(
+            extract_module, "_ocr_page", lambda path, n, allow_vision=True: ("OCR recovered text", False)
+        )
 
         result = extract_module._parse_pdf(tmp_path / "doc.pdf")
 
@@ -134,7 +138,7 @@ class TestParsePdf:
         # page.close() must run for every page even when OCR is involved.
         pages = [FakePage("text"), FakePage(""), FakePage("more text")]
         install_fake_pdfplumber(monkeypatch, pages)
-        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n: "")
+        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n, allow_vision=True: ("", False))
 
         extract_module._parse_pdf(tmp_path / "doc.pdf")
 
@@ -144,7 +148,11 @@ class TestParsePdf:
         pages = [FakePage("") for _ in range(extract_module.MAX_OCR_PAGES_PER_DOCUMENT + 5)]
         install_fake_pdfplumber(monkeypatch, pages)
         ocr_calls = []
-        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n: ocr_calls.append(n) or f"ocr-{n}")
+        monkeypatch.setattr(
+            extract_module,
+            "_ocr_page",
+            lambda path, n, allow_vision=True: (ocr_calls.append(n), (f"ocr-{n}", False))[1],
+        )
 
         result = extract_module._parse_pdf(tmp_path / "doc.pdf")
 
@@ -154,7 +162,7 @@ class TestParsePdf:
 
     def test_raises_when_no_text_recoverable_even_after_ocr(self, tmp_path, monkeypatch):
         install_fake_pdfplumber(monkeypatch, [FakePage("")])
-        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n: "")
+        monkeypatch.setattr(extract_module, "_ocr_page", lambda path, n, allow_vision=True: ("", False))
 
         try:
             extract_module._parse_pdf(tmp_path / "doc.pdf")
@@ -168,12 +176,12 @@ class TestParsePdf:
 
         monkeypatch.setattr(extract_module, "convert_from_path", raise_error)
 
-        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1) == ""
+        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1) == ("", False)
 
     def test_ocr_with_no_images_returned_yields_empty_text(self, monkeypatch, tmp_path):
         monkeypatch.setattr(extract_module, "convert_from_path", lambda *a, **k: [])
 
-        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1) == ""
+        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1) == ("", False)
 
     def test_tesseract_failure_degrades_to_empty_text_not_a_crash(self, monkeypatch, tmp_path):
         monkeypatch.setattr(extract_module, "convert_from_path", lambda *a, **k: ["fake-image"])
@@ -183,7 +191,12 @@ class TestParsePdf:
 
         monkeypatch.setattr(extract_module.pytesseract, "image_to_string", raise_error)
 
-        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1) == ""
+        # allow_vision=False -- this test is specifically about the
+        # Tesseract-failure path, and "fake-image" (a plain string, not a
+        # real PIL Image) would blow up in _vision_ocr_page's image.save()
+        # if vision were attempted first, which is a different code path
+        # than the one under test here.
+        assert extract_module._ocr_page(tmp_path / "doc.pdf", 1, allow_vision=False) == ("", False)
 
 
 class TestChunkPages:

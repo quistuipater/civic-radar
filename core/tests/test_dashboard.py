@@ -461,7 +461,11 @@ class TestDocumentDetailPage:
         resp = client.get(f"/documents/{document.id}")
 
         assert resp.status_code == 200
-        assert "needs review" not in resp.text
+        # The "Correct this document" panel's help text legitimately mentions
+        # "needs review" (it explains what saving a correction clears)
+        # regardless of this AI output's own flag, so check for the AI
+        # output's own review badge specifically rather than the bare phrase.
+        assert '<span class="badge level-3">needs review</span>' not in resp.text
         assert "Mark reviewed" not in resp.text
 
 
