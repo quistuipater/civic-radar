@@ -270,6 +270,7 @@ class NewsArticleOut(BaseModel):
     title: str
     url: str
     outlet_name: str
+    outlet_authority_level: str
     published_at: datetime | None
     summary: str | None
     topic_categories: list[str]

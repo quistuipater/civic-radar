@@ -37,7 +37,7 @@
     <select id="news-source">
       <option value="all">All outlets</option>
       {% for s in news_sources %}
-      <option value="{{ s.id }}">{{ s.name }}</option>
+      <option value="{{ s.id }}">{{ s.name }}{% if s.authority_level != 'media' %} ({{ s.authority_level }}){% endif %}</option>
       {% endfor %}
     </select>
   </label>
@@ -102,6 +102,13 @@
     var tdOutlet = document.createElement('td');
     tdOutlet.className = 'muted';
     tdOutlet.textContent = article.outlet_name;
+    if (article.outlet_authority_level !== 'media') {
+      var advocacyBadge = document.createElement('span');
+      advocacyBadge.className = 'badge level-3';
+      advocacyBadge.style.marginLeft = '0.4rem';
+      advocacyBadge.textContent = article.outlet_authority_level;
+      tdOutlet.appendChild(advocacyBadge);
+    }
     tr.appendChild(tdOutlet);
 
     var tdTopics = document.createElement('td');

@@ -35,7 +35,9 @@ def list_news(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid query parameter: {exc}") from exc
 
-    q = db.query(NewsArticle, NewsSource.name).join(NewsSource, NewsArticle.news_source_id == NewsSource.id)
+    q = db.query(NewsArticle, NewsSource.name, NewsSource.authority_level).join(
+        NewsSource, NewsArticle.news_source_id == NewsSource.id
+    )
     if topic != "all":
         q = q.filter(NewsArticle.topic_categories.any(topic))
     if parsed_source_id is not None:
@@ -45,13 +47,14 @@ def list_news(
     q = q.order_by(NewsArticle.published_at.desc().nullslast()).limit(limit)
 
     results = []
-    for article, outlet_name in q.all():
+    for article, outlet_name, outlet_authority_level in q.all():
         results.append(
             NewsArticleOut(
                 id=str(article.id),
                 title=article.title,
                 url=article.url,
                 outlet_name=outlet_name,
+                outlet_authority_level=outlet_authority_level,
                 published_at=article.published_at,
                 summary=article.summary,
                 topic_categories=article.topic_categories,

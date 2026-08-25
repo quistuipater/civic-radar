@@ -584,6 +584,14 @@ class NewsSource(Base):
     outlet_url: Mapped[str] = mapped_column(Text, nullable=False)
     rss_feed_url: Mapped[str] = mapped_column(Text, nullable=False)
     connector: Mapped[str] = mapped_column(Text, nullable=False)  # "wordpress_rss" | "google_news_proxy"
+    # "media" (a press outlet) vs "advocacy" (a political/issue org's own blog
+    # or call-to-action feed) -- same vocabulary spirit as Source.authority_level,
+    # but a separate field since NewsSource is deliberately independent of
+    # Source (see class docstring). Added because an advocacy org's RSS feed
+    # would otherwise render identically to actual local-paper reporting in
+    # the dashboard/digest, which is exactly the "source facts vs. inference/
+    # opinion" distinction this project's guardrails require.
+    authority_level: Mapped[str] = mapped_column(Text, nullable=False, default="media")
     polling_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
