@@ -69,6 +69,36 @@ The MVP may share the existing PostgreSQL instance and worker process, but its
 tables, services, routes, templates and tests must be clearly namespaced. Core
 business logic must contain no Ventura-specific identifiers.
 
+### Existing entity schema
+
+Organization Tracker extends the existing `entities` and `entity_mentions`
+tables defined in the platform PRD; it does not create a parallel canonical
+identity system. People, organizations, organizational units and positions
+are canonical `entities` rows with appropriate `entity_type` values.
+`entity_mentions` continues to connect those identities to documents,
+agenda items and issues.
+
+Organization Tracker adds typed detail and temporal tables keyed to
+`entities.id`, plus organizational relationships, assertions and events.
+Its resolver must use the existing canonical name and aliases before proposing
+a new entity. Any schema migration needed to support stronger disambiguation
+must extend the shared tables for all consumers rather than fork identity
+records inside this module.
+
+### Phase alignment
+
+This MVP is a deliberate addition to the current Ventura Phase 1 scope. It
+uses the sources, archive, local AI and operator-review pipeline already
+authorized for Ventura; it does not add another jurisdiction or any Phase 3
+public publishing or subscription feature.
+
+Jurisdiction-independent data structures are required only to preserve the
+shared-engine architecture and prevent new Ventura hard-coding. References to
+future federal, corporate or nonprofit use describe a possible reuse path,
+not authorization to build those sources, deployments or features during this
+MVP. Expansion beyond Ventura remains subject to the phase boundaries and
+exit criteria in the platform PRD.
+
 ## Product principles
 
 ### Evidence before interpretation
@@ -192,30 +222,37 @@ action.
 ## Conceptual data model
 
 Use relational tables with stable UUID identifiers. A dedicated graph database
-is not required.
+is not required. The objects below are conceptual types: canonical identity
+and aliases live in the existing `entities` table, evidence occurrences live
+in `entity_mentions` and module-specific tables add typed and temporal
+attributes keyed to those entity IDs.
 
 ### Organization
 
 A legal, administrative, commercial or civic body.
 
-Minimum fields: ID, canonical name, organization type, optional parent,
-jurisdiction, status, valid-from and valid-to.
+Implemented as an `entities` row plus organization detail/version records.
+Minimum fields: entity ID, organization type, optional parent, jurisdiction,
+status, valid-from and valid-to.
 
 ### Organizational unit
 
 A department, office, division, bureau, board, commission, committee, team or
 other component.
 
-Minimum fields: ID, organization ID, canonical name, unit type, optional
-parent unit and status. Names and parent relationships must be versioned when
+Implemented as an `entities` row plus unit detail/version records. Minimum
+fields: entity ID, organization ID, unit type, optional parent unit, status,
+valid-from and valid-to. Names and parent relationships must be versioned when
 they change.
 
 ### Position
 
 A role that may exist independently of any occupant.
 
-Minimum fields: ID, organization ID, optional unit ID, canonical title,
-position type, status and optional authorized count.
+Implemented as an `entities` row plus position detail/version records.
+Minimum fields: entity ID, organization ID, optional unit ID, position type,
+status, optional authorized count, valid-from and valid-to. Titles, unit
+assignments and status changes must be versioned.
 
 Examples include City Manager, Public Works Director, Council Member for
 District 3 and Planning Commissioner.
@@ -224,9 +261,10 @@ District 3 and Planning Commissioner.
 
 A canonical identity for an individual named in organizational evidence.
 
-Minimum fields: ID, display name, normalized name and optional disambiguation
-note. Sensitive personal information is neither required nor collected merely
-to improve matching.
+Implemented using the existing `entities` row with `entity_type=person`,
+canonical name and aliases, extended only if a reviewed disambiguation note is
+needed. Sensitive personal information is neither required nor collected
+merely to improve matching.
 
 ### Relationship
 
@@ -486,7 +524,7 @@ The MVP is complete when:
 
 Expected placement:
 
-~~~text
+```text
 core/app/organization_tracker/
     models.py
     schemas.py
@@ -503,7 +541,7 @@ cities/ventura/
 docs/organization-tracker/
     README.md
     MVP-PRD.md
-~~~
+```
 
 This is a logical boundary, not an independently deployed microservice. It may
 use Civic Radar's database session, documents, archive references, worker, AI
