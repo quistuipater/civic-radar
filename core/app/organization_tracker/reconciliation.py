@@ -27,6 +27,14 @@ CONTRADICTING = "contradicting"
 DUPLICATING = "duplicating"
 UNRESOLVED = "unresolved"
 
+# Predicates where the *object* naturally has at most one open subject at a
+# time (a position has one occupant), so a new subject asserted against an
+# already-occupied object is a real conflict (succession), not just
+# additional state. "member_of" and similar many-subjects-per-object
+# predicates are deliberately excluded -- a board having multiple open
+# memberships to the same object is normal, not a contradiction.
+_SINGLE_OCCUPANT_PREDICATES = {"occupies_position"}
+
 
 @dataclass
 class ReconciliationResult:
@@ -67,6 +75,9 @@ def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> Reconcilia
     if matching_open is not None:
         return ReconciliationResult(CONFIRMING, conflicting_relationship_id=matching_open.id)
 
+    # Subject-side conflict: this same person/entity already has a
+    # different open relationship of this type (e.g. already occupies a
+    # different position).
     conflicting_open = (
         db.query(OrgRelationship)
         .filter(
@@ -79,5 +90,22 @@ def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> Reconcilia
     )
     if conflicting_open is not None:
         return ReconciliationResult(CONTRADICTING, conflicting_relationship_id=conflicting_open.id)
+
+    # Object-side conflict, only for single-occupant predicates: a
+    # different subject already holds this same position/object open --
+    # the succession case (new occupant asserted for an already-filled role).
+    if assertion.predicate in _SINGLE_OCCUPANT_PREDICATES:
+        conflicting_occupant = (
+            db.query(OrgRelationship)
+            .filter(
+                OrgRelationship.object_entity_id == assertion.object_entity_id,
+                OrgRelationship.relationship_type == assertion.predicate,
+                OrgRelationship.subject_entity_id != assertion.subject_entity_id,
+                OrgRelationship.valid_to.is_(None),
+            )
+            .one_or_none()
+        )
+        if conflicting_occupant is not None:
+            return ReconciliationResult(CONTRADICTING, conflicting_relationship_id=conflicting_occupant.id)
 
     return ReconciliationResult(ADDING)

@@ -38,23 +38,38 @@ first implementation pass deliberately left out.
   (correctly extracted the City Manager/City Attorney/City Clerk roster
   with accurate quoted passages and evidence_mode). Extraction never
   touches accepted state -- it only creates assertions.
+- **Event drafting** (`event_drafting.py`): turns a reconciled assertion
+  into a proposed `OrgEvent` -- nothing for CONFIRMING/DUPLICATING/
+  UNRESOLVED (no new, reviewable change). Deliberately conservative about
+  event_type: any assertion whose `evidence_mode` isn't `"explicit"`
+  always becomes `unexplained_state_change`, never a claimed specific
+  personnel action, matching the PRD's "never infer... unless directly
+  source-supported" guardrail. CONTRADICTING on `occupies_position`
+  becomes `reassigned` (succession); everything else follows a
+  predicate→event_type table. Every drafted event still lands `pending`
+  in `review_status` -- nothing here approves anything.
+- **Pipeline orchestration** (`pipeline.py`): `process_document_for_organization`
+  chains extract → (resolve, already inside extraction) → draft-event-per-
+  assertion for one document. Not yet wired into `worker.py` as an
+  ongoing step -- callable directly today.
 - **Minimal read API** (`routers.py`): all eight endpoints listed in the
   PRD, including point-in-time structure (`?at=YYYY-MM-DD`) with resolved
   position occupants.
 - **Tests**: temporal versioning correctness, point-in-time relationship
   queries across a succession, assertion correction history, the event
   review lifecycle, entity resolution tiers, reconciliation
-  classification, and extraction (mocked Ollama, matching
-  `test_classify.py`'s pattern).
+  classification (including the object-side/succession conflict case --
+  found and fixed live while writing `event_drafting.py`'s own test),
+  extraction (mocked Ollama, matching `test_classify.py`'s pattern), event
+  drafting, and the full pipeline. Verified live end-to-end against real
+  Ventura documents and entities: extraction (real City Council minutes,
+  correctly pulled the City Manager/City Attorney/City Clerk roster),
+  ADDING (a genuinely new appointment), and CONTRADICTING/succession (a
+  second person asserted into an already-occupied position) all produced
+  correct, appropriately-worded drafted events.
 
 ## Explicitly deferred (not in this pass)
 
-- **Automatic event drafting**: reconciliation classifies an assertion,
-  but nothing yet turns a CONTRADICTING/ADDING result into a drafted
-  `OrgEvent` automatically -- `service.propose_event` still requires the
-  caller to already know what happened. This is the natural next piece:
-  wire reconciliation's output into an auto-drafted, still-human-reviewed
-  event proposal.
 - **Fuzzy/contextual entity resolution**: resolution's third PRD tier.
   `_resolve_best_guess` in `extraction.py` also only tries exact/alias
   matching across a fixed type-priority order (person, then position,
@@ -72,6 +87,15 @@ first implementation pass deliberately left out.
   `DUPLICATING` check is scoped to the same `document_id` -- the same
   claim re-extracted from two different documents (e.g. an agenda and its
   minutes) isn't caught as a duplicate today.
+- **Single-occupant cardinality is hardcoded to one predicate**:
+  reconciliation's object-side conflict check (a position already has a
+  different occupant) only applies to `occupies_position` --
+  `_SINGLE_OCCUPANT_PREDICATES` would need extending if another predicate
+  later needs the same treatment (e.g. a Mayor-like single-seat `member_of`
+  case).
+- **Not wired into `worker.py`**: nothing runs extraction/reconciliation/
+  event-drafting automatically as documents get parsed -- `pipeline.py` is
+  callable but not yet scheduled.
 
 Building any of the above should follow the same principle the tests
 check for: a write is a new version/row, never a mutation that could lose
