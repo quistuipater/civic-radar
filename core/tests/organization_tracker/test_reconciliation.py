@@ -84,3 +84,61 @@ def test_duplicating_when_identical_assertion_already_exists_for_same_document(d
 
     assert result.classification == reconciliation.DUPLICATING
     assert first.id != second.id
+
+
+def test_three_or_more_identical_assertions_in_one_document_does_not_crash(db):
+    """Regression: with 3+ identical assertions, excluding the one being
+    classified still leaves 2+ matches -- .one_or_none() raised
+    MultipleResultsFound on exactly this input against a real document
+    (confirmed live 2026-08-26) before the dedup checks switched to
+    .first().
+    """
+    position, alice = _setup_position(db)
+    document = make_document(db)
+    for _ in range(3):
+        assertion = _assertion(db, alice.id, "occupies_position", position.id, document=document)
+
+    result = reconciliation.classify_assertion(db, assertion)  # the last one created
+
+    assert result.classification == reconciliation.DUPLICATING
+
+
+def test_duplicating_when_already_proposed_by_a_pending_event_from_a_different_document(db):
+    """The real-world case: the same well-known fact (e.g. an incumbent's
+    name on every meeting's attendance roster) shows up in document after
+    document. Without this check, each one would draft a fresh, near-
+    identical "appointed" event -- confirmed live against 25 real Ventura
+    documents (43 duplicate drafts) before this check existed.
+    """
+    position, alice = _setup_position(db)
+    first_doc_assertion = _assertion(db, alice.id, "occupies_position", position.id)
+    service.propose_event(
+        db, organization_entity_id=position.id, event_type="appointed", title="x", narrative="x",
+        certainty="high", observed_date=date(2026, 1, 1), supporting_assertion_ids=[first_doc_assertion.id],
+    )
+
+    second_doc_assertion = _assertion(db, alice.id, "occupies_position", position.id)
+
+    result = reconciliation.classify_assertion(db, second_doc_assertion)
+
+    assert result.classification == reconciliation.DUPLICATING
+
+
+def test_not_duplicating_when_the_pending_event_was_already_rejected(db):
+    """A rejected proposal doesn't permanently suppress the same claim --
+    an operator saying "no" to one document's version of a claim shouldn't
+    silently swallow a later, possibly better-evidenced restatement.
+    """
+    position, alice = _setup_position(db)
+    first_doc_assertion = _assertion(db, alice.id, "occupies_position", position.id)
+    event = service.propose_event(
+        db, organization_entity_id=position.id, event_type="appointed", title="x", narrative="x",
+        certainty="high", observed_date=date(2026, 1, 1), supporting_assertion_ids=[first_doc_assertion.id],
+    )
+    service.review_event(db, event.id, "rejected")
+
+    second_doc_assertion = _assertion(db, alice.id, "occupies_position", position.id)
+
+    result = reconciliation.classify_assertion(db, second_doc_assertion)
+
+    assert result.classification == reconciliation.ADDING

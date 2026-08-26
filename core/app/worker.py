@@ -26,6 +26,7 @@ from app.issue_matching import match_document_to_issue
 from app.log_handler import DbLogHandler, prune_app_logs
 from app.models import AiOutput, Document, NewsSource, Source
 from app.news.retrieval import poll_news_source
+from app.organization_tracker import pipeline as organization_tracker_pipeline
 from app.parsing.service import parse_document
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -178,11 +179,20 @@ def run_news_batch() -> None:
         db.close()
 
 
+def run_organization_tracker_batch() -> None:
+    db = SessionLocal()
+    try:
+        organization_tracker_pipeline.run_batch(db)
+    finally:
+        db.close()
+
+
 def tick() -> None:
     run_ingestion_tick()
     run_parsing_batch()
     run_ai_batch()
     run_news_batch()
+    run_organization_tracker_batch()
     maybe_prune_app_logs()
 
 

@@ -15,12 +15,17 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.organization_tracker.models import OrgRelationship, OrgSourceAssertion
+from app.organization_tracker.models import OrgEvent, OrgEventAssertion, OrgRelationship, OrgSourceAssertion
 
 # Matches the PRD's classification taxonomy under "Reconciliation" --
 # "supplying a missing date or explanation" is left out since nothing here
 # yet detects that specific case (it would require comparing against an
 # existing relationship's own null fields, not just presence/absence).
+# DUPLICATING covers two distinct cases: the exact same assertion row
+# extracted twice from the same document (a parsing/extraction artifact),
+# and the same claim already sitting in a pending, unreviewed event from a
+# *different* document (the far more common real case -- see the
+# "already_proposed" check below).
 CONFIRMING = "confirming"
 ADDING = "adding"
 CONTRADICTING = "contradicting"
@@ -44,6 +49,15 @@ class ReconciliationResult:
     conflicting_relationship_id: uuid.UUID | None = None
 
 
+# Every exact-match lookup below uses .first() rather than .one_or_none():
+# these are defensive dedup checks over AI-extracted data, not reads
+# against an invariant this module itself enforces. Confirmed live
+# 2026-08-26 that a single real document can yield 3+ assertions
+# extracting the *same* claim (e.g. a name appearing in both a roster and
+# a later motion) -- .one_or_none() crashed with MultipleResultsFound on
+# exactly that input. "found more than one" and "found exactly one" both
+# mean the same thing here (duplicate/already-known), so there's no
+# information lost by not distinguishing them.
 def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> ReconciliationResult:
     if assertion.subject_entity_id is None or assertion.object_entity_id is None:
         return ReconciliationResult(UNRESOLVED)
@@ -57,9 +71,32 @@ def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> Reconcilia
             OrgSourceAssertion.predicate == assertion.predicate,
             OrgSourceAssertion.object_entity_id == assertion.object_entity_id,
         )
-        .one_or_none()
+        .first()
     )
     if duplicate is not None:
+        return ReconciliationResult(DUPLICATING)
+
+    # Already proposed, still awaiting review, from *any* document -- not
+    # just this one. Without this check, the same well-known fact (e.g. an
+    # incumbent's name on every meeting's attendance roster) drafts a fresh
+    # "appointed" event every single time it's re-extracted, since nothing
+    # writes it to accepted org_relationships until an operator approves
+    # it (confirmed live 2026-08-26: 25 real documents produced 43 near-
+    # identical drafted events before this check existed).
+    already_proposed = (
+        db.query(OrgSourceAssertion)
+        .join(OrgEventAssertion, OrgEventAssertion.assertion_id == OrgSourceAssertion.id)
+        .join(OrgEvent, OrgEvent.id == OrgEventAssertion.event_id)
+        .filter(
+            OrgSourceAssertion.id != assertion.id,
+            OrgSourceAssertion.subject_entity_id == assertion.subject_entity_id,
+            OrgSourceAssertion.predicate == assertion.predicate,
+            OrgSourceAssertion.object_entity_id == assertion.object_entity_id,
+            OrgEvent.review_status == "pending",
+        )
+        .first()
+    )
+    if already_proposed is not None:
         return ReconciliationResult(DUPLICATING)
 
     matching_open = (
@@ -70,7 +107,7 @@ def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> Reconcilia
             OrgRelationship.object_entity_id == assertion.object_entity_id,
             OrgRelationship.valid_to.is_(None),
         )
-        .one_or_none()
+        .first()
     )
     if matching_open is not None:
         return ReconciliationResult(CONFIRMING, conflicting_relationship_id=matching_open.id)
@@ -86,7 +123,7 @@ def classify_assertion(db: Session, assertion: OrgSourceAssertion) -> Reconcilia
             OrgRelationship.object_entity_id != assertion.object_entity_id,
             OrgRelationship.valid_to.is_(None),
         )
-        .one_or_none()
+        .first()
     )
     if conflicting_open is not None:
         return ReconciliationResult(CONTRADICTING, conflicting_relationship_id=conflicting_open.id)

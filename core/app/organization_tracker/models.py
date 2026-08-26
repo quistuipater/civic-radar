@@ -183,3 +183,23 @@ class OrgEventEntity(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("org_events.id"), nullable=False, index=True)
     entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("entities.id"), nullable=False)
+
+
+class OrgDocumentProcessing(Base):
+    """Marks a document as already run through the org-tracker pipeline
+    (pipeline.py's run_batch), independent of whether it produced any
+    assertions -- a document with zero organizational content is a valid,
+    final outcome, not something to retry every tick forever. Deliberately
+    not a column on the shared Document model: this is an org-tracker-
+    specific concern, kept namespaced to this module's own tables per the
+    PRD's "clearly namespaced" requirement.
+    """
+
+    __tablename__ = "org_document_processing"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id"), nullable=False, unique=True, index=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    organizations_matched: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    assertions_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    events_drafted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

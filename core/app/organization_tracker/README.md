@@ -50,23 +50,52 @@ first implementation pass deliberately left out.
   in `review_status` -- nothing here approves anything.
 - **Pipeline orchestration** (`pipeline.py`): `process_document_for_organization`
   chains extract → (resolve, already inside extraction) → draft-event-per-
-  assertion for one document. Not yet wired into `worker.py` as an
-  ongoing step -- callable directly today.
+  assertion for one document. `run_batch()` is the ongoing-operation
+  entrypoint -- matches each not-yet-processed parsed document to every
+  currently-tracked organization sharing its `jurisdiction` string,
+  processes it, and marks it done (`OrgDocumentProcessing`) even if zero
+  organizations matched or zero assertions were extracted, so a document
+  with no organizational content isn't retried forever. Deliberately
+  jurisdiction-agnostic, not Ventura-specific in code -- a city with no
+  organizations seeded (Santa Cruz, Boston) just no-ops.
+- **Wired into `worker.py`**: `run_organization_tracker_batch()` runs every
+  tick, after `run_news_batch()`.
+- **Cross-document duplicate detection**: reconciliation now also checks
+  for the same claim already sitting in a *pending* drafted event from any
+  document, not just the same one -- without this, the same well-known
+  fact (an incumbent's name recurring on every meeting's roster) drafted a
+  fresh near-identical event every time it was re-extracted. A rejected
+  (not pending) prior proposal doesn't suppress a later restatement.
 - **Minimal read API** (`routers.py`): all eight endpoints listed in the
   PRD, including point-in-time structure (`?at=YYYY-MM-DD`) with resolved
   position occupants.
 - **Tests**: temporal versioning correctness, point-in-time relationship
   queries across a succession, assertion correction history, the event
-  review lifecycle, entity resolution tiers, reconciliation
-  classification (including the object-side/succession conflict case --
-  found and fixed live while writing `event_drafting.py`'s own test),
-  extraction (mocked Ollama, matching `test_classify.py`'s pattern), event
-  drafting, and the full pipeline. Verified live end-to-end against real
-  Ventura documents and entities: extraction (real City Council minutes,
-  correctly pulled the City Manager/City Attorney/City Clerk roster),
-  ADDING (a genuinely new appointment), and CONTRADICTING/succession (a
-  second person asserted into an already-occupied position) all produced
-  correct, appropriately-worded drafted events.
+  review lifecycle, entity resolution tiers, reconciliation classification
+  (object-side/succession conflicts, cross-document dedup, the
+  3+-identical-assertions-in-one-document crash), extraction (mocked
+  Ollama), event drafting, and the full pipeline including `run_batch`.
+  Verified live end-to-end against real Ventura documents and entities,
+  including catching two real bugs live testing exposed that no unit test
+  had covered yet (see below) and confirming the fixes against the actual
+  documents that had triggered them.
+
+## Known limitations (real, found during live testing -- not yet fixed)
+
+- **AI extraction is not always valid JSON.** On real (longer/more complex)
+  documents, the model sometimes returns malformed JSON that fails to
+  parse -- `extraction.py` catches this and returns no assertions for that
+  document rather than crashing, but that document's organizational
+  content is then silently missed until the prompt/model/parsing is
+  improved. Worth monitoring `org assertion extraction failed... invalid
+  JSON` in worker logs.
+- **`run_batch()` is not safe to run concurrently** against the same
+  database -- confirmed live 2026-08-26 that two overlapping invocations
+  (an accidentally-orphaned background process plus a fresh one) raced on
+  `OrgDocumentProcessing`'s unique constraint. Not a problem for the
+  single `worker.py` tick loop (which never overlaps itself), but don't
+  invoke `run_batch` manually while the worker is also running, or from
+  more than one script/process at once.
 
 ## Explicitly deferred (not in this pass)
 
@@ -79,23 +108,16 @@ first implementation pass deliberately left out.
   detail, Change log and Review queue pages don't exist yet -- everything
   above is reachable via the API only.
 - **Ventura source configuration** (`cities/ventura/organization_sources.py`
-  in the PRD's implementation boundary): extraction runs against whatever
-  document is passed to it, but nothing yet selects which of Ventura's
-  documents should feed it as an ongoing pipeline step (e.g. a worker
-  hook analogous to `classify_document`'s).
-- **Duplicate-assertion detection across documents**: reconciliation's
-  `DUPLICATING` check is scoped to the same `document_id` -- the same
-  claim re-extracted from two different documents (e.g. an agenda and its
-  minutes) isn't caught as a duplicate today.
+  in the PRD's implementation boundary): `run_batch` processes every
+  parsed document sharing a tracked organization's jurisdiction string --
+  there's no source-level allowlist/denylist yet if that turns out to be
+  too broad or too narrow in practice.
 - **Single-occupant cardinality is hardcoded to one predicate**:
   reconciliation's object-side conflict check (a position already has a
   different occupant) only applies to `occupies_position` --
   `_SINGLE_OCCUPANT_PREDICATES` would need extending if another predicate
   later needs the same treatment (e.g. a Mayor-like single-seat `member_of`
   case).
-- **Not wired into `worker.py`**: nothing runs extraction/reconciliation/
-  event-drafting automatically as documents get parsed -- `pipeline.py` is
-  callable but not yet scheduled.
 
 Building any of the above should follow the same principle the tests
 check for: a write is a new version/row, never a mutation that could lose
