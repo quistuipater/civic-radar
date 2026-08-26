@@ -157,6 +157,48 @@ Respond with ONLY a JSON object matching this exact shape:
 }}
 """
 
+ORG_ASSERTION_EXTRACTION_PROMPT = """You are extracting organizational-structure claims from a {project_name} \
+government document, for a system that tracks who holds which position, which units exist, and how they report \
+to each other over time. Extract only claims actually stated in the text -- never infer a personnel action \
+(appointed, resigned, terminated, promoted, demoted) that the text doesn't explicitly state. A person's name \
+appearing near a title is not itself proof of an appointment; only extract "occupies_position" if the text \
+states or clearly implies that relationship (e.g. "Jane Smith, City Manager" on a roster, or "the Council \
+appointed Jane Smith as City Manager").
+
+Use predicate values ONLY from this list: occupies_position, member_of, reports_to_position, \
+unit_reports_to_unit, appoints, oversees, part_of, succeeded_by.
+
+evidence_mode must be one of: "explicit" (the text directly states this fact), "derived" (the text states \
+something else that implies this, e.g. a vote result implies an appointment), "inferred" (a weaker inference \
+you are less certain of -- prefer not extracting rather than inferring).
+
+Document type: {document_type}
+Jurisdiction: {jurisdiction}
+Agency/body: {agency}
+
+Document text:
+---
+{text}
+---
+
+Respond with ONLY a JSON object matching this exact shape:
+{{
+  "assertions": [
+    {{
+      "subject_text": "...",
+      "predicate": "occupies_position",
+      "object_text": "...",
+      "assertion_type": "appointment|membership|reporting_line|unit_change|other",
+      "effective_date": "YYYY-MM-DD or null",
+      "evidence_mode": "explicit|derived|inferred",
+      "quoted_passage": "the exact sentence or phrase supporting this claim",
+      "confidence": "high|medium|low"
+    }}
+  ]
+}}
+If no organizational claims are found, respond with {{"assertions": []}}.
+"""
+
 PROMPT_DEFAULTS = [
     dict(
         prompt_key="agenda_item_classification",
@@ -237,6 +279,29 @@ PROMPT_DEFAULTS = [
             "notable_public_comment": "str",
             "continued_or_tabled_items": "str",
             "source_confidence": "str",
+        },
+        active=True,
+    ),
+    dict(
+        prompt_key="org_assertion_extraction",
+        prompt_version="v1",
+        task_type="org_assertion_extraction",
+        prompt_text=ORG_ASSERTION_EXTRACTION_PROMPT,
+        model_name=None,
+        model_params={"temperature": 0.1},
+        json_schema={
+            "assertions": [
+                {
+                    "subject_text": "str",
+                    "predicate": "str",
+                    "object_text": "str",
+                    "assertion_type": "str",
+                    "effective_date": "str|null",
+                    "evidence_mode": "str",
+                    "quoted_passage": "str",
+                    "confidence": "str",
+                }
+            ]
         },
         active=True,
     ),

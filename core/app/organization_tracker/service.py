@@ -272,12 +272,18 @@ def record_assertion(
     source_authority: str | None = None,
     confidence: str | None = None,
     superseded_assertion_id: uuid.UUID | None = None,
+    model_name: str | None = None,
+    prompt_version: str | None = None,
+    chunk_id: uuid.UUID | None = None,
+    page_number: int | None = None,
 ) -> OrgSourceAssertion:
     if superseded_assertion_id is not None:
         superseded = db.get(OrgSourceAssertion, superseded_assertion_id)
         superseded.review_status = "superseded"
     assertion = OrgSourceAssertion(
         document_id=document_id,
+        chunk_id=chunk_id,
+        page_number=page_number,
         subject_text=subject_text,
         subject_entity_id=subject_entity_id,
         predicate=predicate,
@@ -287,6 +293,9 @@ def record_assertion(
         effective_date=effective_date,
         observed_at=datetime.now(timezone.utc),
         evidence_mode=evidence_mode,
+        quoted_passage=quoted_passage,
+        model_name=model_name,
+        prompt_version=prompt_version,
         source_authority=source_authority,
         extraction_method=extraction_method,
         confidence=confidence,

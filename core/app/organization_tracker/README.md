@@ -18,38 +18,60 @@ first implementation pass deliberately left out.
   review an event (approve/reject/defer). Every mutation follows "current
   state never destroys history" -- a changed attribute closes the open
   version and opens a new one, never an in-place UPDATE of a value.
+- **Entity resolution** (`resolution.py`): deterministic matching only --
+  exact normalized canonical-name and accepted-alias tiers, scoped by
+  `entity_type`. The PRD's third tier ("high-confidence contextual match
+  requiring review") is fuzzy/AI-adjacent and deferred; `resolve_entity`
+  returning `None` means "no confident match," not "definitely new."
+- **Reconciliation** (`reconciliation.py`): deterministic classification
+  of a resolved assertion against `org_relationships` --
+  confirming/adding/contradicting/duplicating/unresolved. Scoped to
+  relationship-type assertions (e.g. `occupies_position`); reconciling a
+  unit/position *attribute* change (a rename) against its own version
+  history is a separate, not-yet-built case.
+- **Extraction** (`extraction.py`): turns a parsed document into candidate
+  `OrgSourceAssertion` rows via the local Ollama layer (new
+  `org_assertion_extraction` prompt in `app/ai/prompts.py`, same
+  Prompt-row + degrade-to-nothing pattern as `app/ai/classify.py`), then
+  resolves each claim's subject/object text against known entities.
+  Verified live against a real Ventura City Council minutes document
+  (correctly extracted the City Manager/City Attorney/City Clerk roster
+  with accurate quoted passages and evidence_mode). Extraction never
+  touches accepted state -- it only creates assertions.
 - **Minimal read API** (`routers.py`): all eight endpoints listed in the
   PRD, including point-in-time structure (`?at=YYYY-MM-DD`) with resolved
   position occupants.
-- **Tests** (`tests/organization_tracker/test_service.py`): temporal
-  versioning correctness, point-in-time relationship queries across a
-  succession, assertion correction history, and the event review
-  lifecycle.
+- **Tests**: temporal versioning correctness, point-in-time relationship
+  queries across a succession, assertion correction history, the event
+  review lifecycle, entity resolution tiers, reconciliation
+  classification, and extraction (mocked Ollama, matching
+  `test_classify.py`'s pattern).
 
 ## Explicitly deferred (not in this pass)
 
-- **Extraction** (`extraction.py` in the PRD's implementation boundary):
-  turning a parsed document into candidate assertions via the local AI
-  layer. Nothing here calls Ollama.
-- **Entity resolution** (`resolution.py`): matching a candidate name to an
-  existing `entities` row versus creating a new one. `service.py`'s
-  `create_person`/`create_unit`/`create_position` always create a new
-  entity -- there's no dedup/matching logic yet.
-- **Reconciliation** (`reconciliation.py`): classifying a new assertion
-  against accepted state (confirms / contradicts / proposes an event /
-  duplicate / ...) and auto-drafting an event from it. `service.py`'s
-  `propose_event` requires the caller to already know what happened;
-  nothing infers a candidate event from an assertion automatically today.
+- **Automatic event drafting**: reconciliation classifies an assertion,
+  but nothing yet turns a CONTRADICTING/ADDING result into a drafted
+  `OrgEvent` automatically -- `service.propose_event` still requires the
+  caller to already know what happened. This is the natural next piece:
+  wire reconciliation's output into an auto-drafted, still-human-reviewed
+  event proposal.
+- **Fuzzy/contextual entity resolution**: resolution's third PRD tier.
+  `_resolve_best_guess` in `extraction.py` also only tries exact/alias
+  matching across a fixed type-priority order (person, then position,
+  unit, organization) -- a real ambiguity (two people with the same name)
+  isn't disambiguated by context today.
 - **Dashboard UI** (`templates/`): the PRD's Organization overview, Entity
   detail, Change log and Review queue pages don't exist yet -- everything
   above is reachable via the API only.
 - **Ventura source configuration** (`cities/ventura/organization_sources.py`
-  in the PRD's implementation boundary): no Ventura-specific source list
-  or seed data yet.
-- **Duplicate-assertion detection**: the PRD's reliability requirement
-  ("detect duplicate assertions") belongs to reconciliation, not the write
-  path -- `record_assertion` will happily create two identical assertions
-  if called twice.
+  in the PRD's implementation boundary): extraction runs against whatever
+  document is passed to it, but nothing yet selects which of Ventura's
+  documents should feed it as an ongoing pipeline step (e.g. a worker
+  hook analogous to `classify_document`'s).
+- **Duplicate-assertion detection across documents**: reconciliation's
+  `DUPLICATING` check is scoped to the same `document_id` -- the same
+  claim re-extracted from two different documents (e.g. an agenda and its
+  minutes) isn't caught as a duplicate today.
 
 Building any of the above should follow the same principle the tests
 check for: a write is a new version/row, never a mutation that could lose
