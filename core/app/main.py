@@ -7,6 +7,7 @@ from app import dashboard
 from app.config import settings
 from app.db import SessionLocal
 from app.log_handler import DbLogHandler
+from app.organization_tracker import dashboard as organization_tracker_dashboard
 from app.organization_tracker import routers as organization_tracker
 from app.routers import (
     alerts,
@@ -42,6 +43,7 @@ app.include_router(food_inspections.router)
 app.include_router(logs.router)
 app.include_router(news.router)
 app.include_router(organization_tracker.router)
+app.include_router(organization_tracker_dashboard.router)
 app.include_router(dashboard.router)
 
 app.mount("/archive", StaticFiles(directory=settings.archive_root), name="archive")

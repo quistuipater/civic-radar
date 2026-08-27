@@ -69,6 +69,24 @@ first implementation pass deliberately left out.
 - **Minimal read API** (`routers.py`): all eight endpoints listed in the
   PRD, including point-in-time structure (`?at=YYYY-MM-DD`) with resolved
   position occupants.
+- **Dashboard UI** (`dashboard.py` + `templates/organization_{list,detail,review}.html`):
+  `/organizations` (list, with a pending-review badge per org),
+  `/organizations/{id}` (current structure, or `?at=` for a past date),
+  `/organizations/{id}/review` (pending events with evidence, source-document
+  links, and Approve/Reject/Defer). **Approving now applies the event's
+  underlying relationship to accepted state in the same transaction**
+  (`service._apply_approved_event`) -- the PRD's "Acceptance is
+  transactional... commit together." Added while building the UI, since
+  shipping an Approve button that only changed a status label without
+  updating the org chart would have been misleading. Handles subject-side
+  supersede (moved to a different position) and object-side supersede
+  (succession), the same conflict logic reconciliation itself uses.
+  `unexplained_state_change` events never auto-apply, even on approval --
+  approving one means "worth keeping on record," not "I know what
+  happened." Verified live via the real form endpoint: rejected 4 real
+  pending events (see below) and confirmed the org chart was untouched;
+  approved a real test event and confirmed the relationship was created
+  with the correct effective date and prior-occupant closure.
 - **Tests**: temporal versioning correctness, point-in-time relationship
   queries across a succession, assertion correction history, the event
   review lifecycle, entity resolution tiers, reconciliation classification
@@ -96,15 +114,23 @@ once, live, via `docker cp` + `docker exec ... python organization_baseline.py`
 (not yet wired into `seed_sources.py`'s bind-mount pattern -- a one-off
 so far, not part of the regular per-city deploy flow).
 
-Running `pipeline.run_batch` against this baseline live confirmed the
-whole loop works correctly: a real Council minutes document restating
-already-known facts (10 assertions) produced **zero** drafted events (all
-correctly classified CONFIRMING) -- and a second real document produced
-exactly one event, which turned out to be a genuine AI extraction error
-(misattributed Bill Ayub to City Attorney instead of City Manager, from a
-bare table-header line with no name on it). That event sat `pending` for
-human review rather than silently corrupting accepted state -- exactly
-the safety behavior the whole design exists for.
+Running `pipeline.run_batch` against this baseline live (both manually and
+via the worker's own tick loop, unattended) confirmed the whole loop works
+correctly: most real documents restating already-known facts correctly
+classified CONFIRMING and drafted nothing. Four real events did get
+drafted from the worker's own unattended run, and all four turned out to
+be genuine AI extraction errors on messy real text -- e.g. Bill Ayub
+misattributed to City Attorney instead of City Manager from a bare
+table-header line, and Michael B. MacDonald's predicate extracted as
+"appoints" with a quoted passage that was actually unrelated Zoom
+dial-in instructions. All four sat `pending` rather than corrupting
+accepted state, and were reviewed and rejected through the real dashboard
+form endpoint (`/organizations/{id}/events/{id}/review`) -- confirmed the
+org chart was untouched afterward. This is the extraction-quality
+limitation noted above ("AI extraction is not always valid JSON") showing
+up in a milder form: even when the JSON parses, the *content* can still be
+wrong on ambiguous source text, which is exactly why nothing here
+auto-applies without review.
 
 ## Known limitations (real, found during live testing -- not yet fixed)
 
@@ -130,9 +156,14 @@ the safety behavior the whole design exists for.
   matching across a fixed type-priority order (person, then position,
   unit, organization) -- a real ambiguity (two people with the same name)
   isn't disambiguated by context today.
-- **Dashboard UI** (`templates/`): the PRD's Organization overview, Entity
-  detail, Change log and Review queue pages don't exist yet -- everything
-  above is reachable via the API only.
+- **Change log page**: the PRD's "Change log" (filterable history of
+  approved events) doesn't exist yet -- only the pending-review queue does.
+  Approved/rejected events are still queryable via the API
+  (`GET /organizations/{id}/events`), just not through a dedicated page.
+- **Entity detail page**: the PRD's "Entity detail" (occupancy history,
+  aliases, associated events for one person/position/unit) doesn't exist
+  yet -- `/organizations/{id}` shows the whole org's current structure,
+  not a focused single-entity view.
 - **Ventura source configuration** (`cities/ventura/organization_sources.py`
   in the PRD's implementation boundary): `run_batch` processes every
   parsed document sharing a tracked organization's jurisdiction string --

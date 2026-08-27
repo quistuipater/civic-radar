@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Review — {{ entity.canonical_name }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Review: {{ entity.canonical_name }}</h1>
+<p class="muted"><a class="link" href="/organizations/{{ entity.id }}">&larr; back to structure</a></p>
+
+{% if event_context %}
+{% for ctx in event_context %}
+<div class="panel">
+  <p>
+    <span class="badge level-3">{{ ctx.event.event_type }}</span>
+    <strong>{{ ctx.event.title }}</strong>
+    <span class="muted">— certainty: {{ ctx.event.certainty }}, observed {{ ctx.event.observed_date }}{% if ctx.event.effective_date %}, effective {{ ctx.event.effective_date }}{% endif %}</span>
+  </p>
+  <p>{{ ctx.event.narrative }}</p>
+
+  {% if ctx.assertions %}
+  <p class="muted">Supporting evidence:</p>
+  <ul>
+    {% for a in ctx.assertions %}
+    <li>
+      {{ a.subject_text }} — {{ a.predicate }} — {{ a.object_text or '' }}
+      <span class="muted">({{ a.evidence_mode }}, confidence: {{ a.confidence or 'n/a' }})</span>
+      {% if a.quoted_passage %}<br><span class="muted">"{{ a.quoted_passage }}"</span>{% endif %}
+      <br><a class="link" href="/documents/{{ a.document_id }}">source document</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if ctx.affected %}
+  <p class="muted">Affects: {% for e in ctx.affected %}{{ e.canonical_name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% endif %}
+
+  <form method="post" action="/organizations/{{ entity.id }}/events/{{ ctx.event.id }}/review">
+    <label>Reviewer note <span class="muted">(optional)</span></label>
+    <textarea name="reviewer_note" rows="2" style="width:100%"></textarea>
+    <div style="margin-top:0.75rem">
+      <button type="submit" name="decision" value="approved">Approve</button>
+      <button type="submit" name="decision" value="rejected" class="secondary">Reject</button>
+      <button type="submit" name="decision" value="deferred" class="secondary">Defer</button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<p class="empty">Nothing pending review.</p>
+{% endif %}
+{% endblock %}

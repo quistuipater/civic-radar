@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Organizations — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Organizations</h1>
+{% if organizations %}
+<table>
+  <tr><th>Name</th><th>Type</th><th>Jurisdiction</th><th>Tracked since</th><th>Pending review</th></tr>
+  {% for entity, version in organizations %}
+  <tr>
+    <td><a class="link" href="/organizations/{{ entity.id }}">{{ entity.canonical_name }}</a></td>
+    <td class="muted">{{ version.org_type }}</td>
+    <td class="muted">{{ version.jurisdiction or '—' }}</td>
+    <td class="muted">{{ version.valid_from }}</td>
+    <td>
+      {% if pending_counts.get(entity.id) %}
+        <a class="link" href="/organizations/{{ entity.id }}/review">
+          <span class="badge level-3">{{ pending_counts[entity.id] }} pending</span>
+        </a>
+      {% else %}<span class="muted">—</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No organizations tracked yet.</p>
+{% endif %}
+{% endblock %}

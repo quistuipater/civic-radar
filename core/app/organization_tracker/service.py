@@ -343,10 +343,13 @@ def review_event(
     db: Session, event_id: uuid.UUID, decision: str, reviewer_note: str | None = None
 ) -> OrgEvent:
     """decision: "approved" | "rejected" | "deferred" (PRD "Review": approve,
-    edit, reject or defer). Only touches the event's own review state --
-    approving an event does not itself apply relationship/version changes;
-    an operator (or, later, an automated apply step) makes those through
-    the functions above, each independently auditable via its own row.
+    edit, reject or defer). "approved" also applies the event's underlying
+    relationship change to accepted state (see _apply_approved_event) --
+    the PRD's "Acceptance is transactional: event, state transition...
+    commit together" -- except "unexplained_state_change" events, which
+    never auto-apply (approving one means "worth keeping on record," not
+    "I know what actually happened"). "rejected"/"deferred" only touch the
+    event's own review state.
     """
     if decision not in ("approved", "rejected", "deferred"):
         raise ValueError(f"invalid review decision: {decision}")
@@ -354,6 +357,91 @@ def review_event(
     event.review_status = decision
     event.reviewer_note = reviewer_note
     event.reviewed_at = datetime.now(timezone.utc)
+    if decision == "approved":
+        _apply_approved_event(db, event)
     db.commit()
     db.refresh(event)
     return event
+
+
+def _apply_approved_event(db: Session, event: OrgEvent) -> None:
+    """Applies the state change an approved event represents -- the PRD's
+    "Acceptance is transactional: event, state transition... commit
+    together." Deliberately conservative: "unexplained_state_change"
+    events never apply anything even on approval (approving one means
+    "yes, this is worth keeping on record," not "yes, I know what
+    actually happened" -- there's nothing concrete enough to apply). Only
+    touches org_relationships, driven by the event's supporting
+    assertions' resolved subject/predicate/object.
+    """
+    from app.organization_tracker.reconciliation import _SINGLE_OCCUPANT_PREDICATES
+
+    if event.event_type == "unexplained_state_change":
+        return
+
+    links = db.query(OrgEventAssertion).filter(OrgEventAssertion.event_id == event.id).all()
+    assertion_ids = [link.assertion_id for link in links]
+    assertions = db.query(OrgSourceAssertion).filter(OrgSourceAssertion.id.in_(assertion_ids)).all()
+
+    for assertion in assertions:
+        if assertion.subject_entity_id is None or assertion.object_entity_id is None:
+            continue
+        effective = assertion.effective_date or event.effective_date or event.observed_date
+
+        already_open = (
+            db.query(OrgRelationship)
+            .filter(
+                OrgRelationship.subject_entity_id == assertion.subject_entity_id,
+                OrgRelationship.relationship_type == assertion.predicate,
+                OrgRelationship.object_entity_id == assertion.object_entity_id,
+                OrgRelationship.valid_to.is_(None),
+            )
+            .first()
+        )
+        if already_open is not None:
+            continue  # already accepted state (CONFIRMING) -- nothing to change
+
+        # Subject-side supersede: this entity's other open relationship of
+        # this type closes (e.g. moved from one position to another).
+        db.query(OrgRelationship).filter(
+            OrgRelationship.subject_entity_id == assertion.subject_entity_id,
+            OrgRelationship.relationship_type == assertion.predicate,
+            OrgRelationship.object_entity_id != assertion.object_entity_id,
+            OrgRelationship.valid_to.is_(None),
+        ).update({OrgRelationship.valid_to: effective}, synchronize_session=False)
+
+        # Object-side supersede (succession), only for single-occupant predicates.
+        if assertion.predicate in _SINGLE_OCCUPANT_PREDICATES:
+            db.query(OrgRelationship).filter(
+                OrgRelationship.object_entity_id == assertion.object_entity_id,
+                OrgRelationship.relationship_type == assertion.predicate,
+                OrgRelationship.subject_entity_id != assertion.subject_entity_id,
+                OrgRelationship.valid_to.is_(None),
+            ).update({OrgRelationship.valid_to: effective}, synchronize_session=False)
+
+        db.add(
+            OrgRelationship(
+                subject_entity_id=assertion.subject_entity_id,
+                relationship_type=assertion.predicate,
+                object_entity_id=assertion.object_entity_id,
+                valid_from=effective,
+            )
+        )
+
+
+def current_occupants(db: Session, position_entity_id: uuid.UUID, as_of: date | None = None) -> list[Entity]:
+    """Entities holding "occupies_position" against this position as of a
+    date (None = today/current). A position persists independently of who
+    holds it, so this is a relationship query, not a PositionVersion field.
+    """
+    query = db.query(Entity).join(OrgRelationship, OrgRelationship.subject_entity_id == Entity.id).filter(
+        OrgRelationship.relationship_type == "occupies_position",
+        OrgRelationship.object_entity_id == position_entity_id,
+    )
+    if as_of is None:
+        query = query.filter(OrgRelationship.valid_to.is_(None))
+    else:
+        query = query.filter(
+            OrgRelationship.valid_from <= as_of, (OrgRelationship.valid_to.is_(None)) | (OrgRelationship.valid_to > as_of)
+        )
+    return query.all()

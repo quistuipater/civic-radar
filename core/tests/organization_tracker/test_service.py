@@ -180,6 +180,96 @@ def test_event_review_lifecycle_preserves_history(db):
     assert db.query(OrgEventEntity).filter(OrgEventEntity.event_id == event.id).count() == 1
 
 
+def test_approving_an_appointed_event_applies_the_relationship(db):
+    """The PRD's "Acceptance is transactional": approving isn't just a
+    label change, it applies the underlying relationship -- otherwise
+    the org chart never actually updates from a reviewed event.
+    """
+    ventura = _make_ventura(db)
+    position = service.create_position(
+        db, title="Public Works Director", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2015, 1, 1),
+    )
+    carlos = service.create_person(db, "Carlos Cruz")
+    assertion = service.record_assertion(
+        db, document_id=make_document(db).id, subject_text="Carlos Cruz", subject_entity_id=carlos.id,
+        predicate="occupies_position", object_text="Public Works Director", object_entity_id=position.id,
+        assertion_type="appointment", evidence_mode="explicit", extraction_method="human_manual_entry",
+    )
+    event = service.propose_event(
+        db, organization_entity_id=ventura.id, event_type="appointed", title="x", narrative="x",
+        certainty="high", observed_date=date(2026, 8, 4), effective_date=date(2026, 8, 1),
+        supporting_assertion_ids=[assertion.id],
+    )
+
+    from app.organization_tracker.models import OrgRelationship
+
+    assert db.query(OrgRelationship).count() == 0  # nothing accepted yet, still pending
+
+    service.review_event(db, event.id, "approved")
+
+    rel = db.query(OrgRelationship).filter(
+        OrgRelationship.subject_entity_id == carlos.id, OrgRelationship.object_entity_id == position.id
+    ).one()
+    assert rel.valid_from == date(2026, 8, 1)  # the assertion's own effective_date, not observed_date
+    assert rel.valid_to is None
+
+
+def test_approving_a_reassigned_event_closes_the_prior_occupant(db):
+    ventura = _make_ventura(db)
+    position = service.create_position(
+        db, title="City Manager", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2015, 1, 1),
+    )
+    alice = service.create_person(db, "Alice Alvarez")
+    bob = service.create_person(db, "Bob Baxter")
+    service.start_relationship(db, alice.id, "occupies_position", position.id, valid_from=date(2018, 1, 1))
+
+    assertion = service.record_assertion(
+        db, document_id=make_document(db).id, subject_text="Bob Baxter", subject_entity_id=bob.id,
+        predicate="occupies_position", object_text="City Manager", object_entity_id=position.id,
+        assertion_type="appointment", evidence_mode="explicit", extraction_method="human_manual_entry",
+    )
+    event = service.propose_event(
+        db, organization_entity_id=ventura.id, event_type="reassigned", title="x", narrative="x",
+        certainty="high", observed_date=date(2026, 8, 4), effective_date=date(2026, 8, 1),
+        supporting_assertion_ids=[assertion.id],
+    )
+
+    service.review_event(db, event.id, "approved")
+
+    from app.organization_tracker.models import OrgRelationship
+
+    alice_rel = db.query(OrgRelationship).filter(OrgRelationship.subject_entity_id == alice.id).one()
+    bob_rel = db.query(OrgRelationship).filter(OrgRelationship.subject_entity_id == bob.id).one()
+    assert alice_rel.valid_to == date(2026, 8, 1)
+    assert bob_rel.valid_to is None
+
+
+def test_approving_an_unexplained_state_change_applies_nothing(db):
+    ventura = _make_ventura(db)
+    position = service.create_position(
+        db, title="City Manager", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2015, 1, 1),
+    )
+    someone = service.create_person(db, "Someone Unclear")
+    assertion = service.record_assertion(
+        db, document_id=make_document(db).id, subject_text="Someone Unclear", subject_entity_id=someone.id,
+        predicate="occupies_position", object_text="City Manager", object_entity_id=position.id,
+        assertion_type="appointment", evidence_mode="inferred", extraction_method="ai_ollama",
+    )
+    event = service.propose_event(
+        db, organization_entity_id=ventura.id, event_type="unexplained_state_change", title="x", narrative="x",
+        certainty="low", observed_date=date(2026, 8, 4), supporting_assertion_ids=[assertion.id],
+    )
+
+    service.review_event(db, event.id, "approved")
+
+    from app.organization_tracker.models import OrgRelationship
+
+    assert db.query(OrgRelationship).count() == 0
+
+
 def test_review_event_rejects_invalid_decision(db):
     ventura = _make_ventura(db)
     event = service.propose_event(

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ entity.canonical_name }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>{{ entity.canonical_name }}</h1>
+<p class="muted">
+  {{ org_version.org_type if org_version else '' }}{% if org_version and org_version.jurisdiction %} — {{ org_version.jurisdiction }}{% endif %}
+  — structure as of {{ as_of or "today" }}
+  {% if pending_count %}
+    · <a class="link" href="/organizations/{{ entity.id }}/review"><span class="badge level-3">{{ pending_count }} pending review</span></a>
+  {% endif %}
+</p>
+
+<form method="get" action="/organizations/{{ entity.id }}" class="panel">
+  <label>View structure as of a date <span class="muted">— leave blank for current</span></label>
+  <input type="date" name="at" value="{{ as_of or '' }}" style="width:200px">
+  <button type="submit" style="margin-left:0.5rem">Go</button>
+</form>
+
+{% if not org_version %}
+<p class="empty">No version of this organization exists as of that date.</p>
+{% else %}
+
+<h2>Council / Leadership</h2>
+{% if positions %}
+<table>
+  <tr><th>Position</th><th>Type</th><th>Occupant(s)</th><th>Status</th></tr>
+  {% for p in positions %}
+  <tr>
+    <td>{{ p.version.title }}</td>
+    <td class="muted">{{ p.version.position_type }}</td>
+    <td>
+      {% if p.occupants %}
+        {% for o in p.occupants %}{{ o.canonical_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+      {% else %}<span class="muted">vacant</span>{% endif %}
+    </td>
+    <td class="muted">{{ p.version.status }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No positions tracked.</p>
+{% endif %}
+
+<h2>Units</h2>
+{% if units %}
+<table>
+  <tr><th>Unit</th><th>Type</th><th>Status</th></tr>
+  {% for e, v in units %}
+  <tr><td>{{ v.canonical_name }}</td><td class="muted">{{ v.unit_type }}</td><td class="muted">{{ v.status }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No units tracked.</p>
+{% endif %}
+
+{% endif %}
+{% endblock %}
