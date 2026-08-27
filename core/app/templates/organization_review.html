@@ -29,7 +29,9 @@
   {% endif %}
 
   {% if ctx.affected %}
-  <p class="muted">Affects: {% for e in ctx.affected %}<a class="link" href="/entities/{{ e.id }}">{{ e.canonical_name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  <p class="muted">Affects:
+    {% for e in ctx.affected %}<a class="link" href="/entities/{{ e.id }}">{{ e.canonical_name }}</a> <span class="muted">({{ e.entity_type }})</span>{% if not loop.last %}; {% endif %}{% endfor %}
+  </p>
   {% endif %}
 
   <form method="post" action="/organizations/{{ entity.id }}/events/{{ ctx.event.id }}/review">

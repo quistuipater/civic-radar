@@ -140,6 +140,24 @@ auto-applies without review.
 
 ## Known limitations (real, found during live testing -- not yet fixed)
 
+- **Multi-column rosters flattened onto one line can still mis-pair names
+  and titles**, even after the `org_assertion_extraction` prompt (v2, added
+  2026-08-27) was tightened with an explicit rule and worked example. The
+  real trigger was a Ventura agenda roster
+  (`_06032024-3208`) where a two-column attendee list collapsed into single
+  lines like "Joe Schroeder, Mayor Meredith Hart, Economic Development
+  Manager" -- pdfplumber's `extract_text()` reads left-to-right by
+  y-position with no table/column awareness, so the source text itself
+  loses the column boundary. v1 of the prompt mis-paired every second
+  person with the *first* title on the line rather than their own; v2's
+  explicit worked example (matching this exact document) fixed all 5 pairs
+  on live re-extraction. Not fixed at the root: pdfplumber is never told
+  this is a table, so a differently-worded multi-column roster from another
+  city could still confuse the model the same way -- prompt-level guidance
+  is a mitigation, not a structural fix. A more robust fix would extract
+  column layout via `page.extract_table()`/`.extract_words()` with x/y
+  coordinates instead of flat `extract_text()`, at least for roster-shaped
+  pages, but that's real parsing work, not attempted here.
 - **AI extraction is not always valid JSON.** On real (longer/more complex)
   documents, the model sometimes returns malformed JSON that fails to
   parse -- `extraction.py` catches this and returns no assertions for that

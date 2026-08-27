@@ -168,6 +168,17 @@ appointed Jane Smith as City Manager").
 Use predicate values ONLY from this list: occupies_position, member_of, reports_to_position, \
 unit_reports_to_unit, appoints, oversees, part_of, succeeded_by.
 
+For "occupies_position", subject_text is ALWAYS the person's name and object_text is ALWAYS the position \
+title -- never the reverse. Roster text is often a repeating "Name, Title" pattern, sometimes with several \
+such pairs run together on one line because the source document laid them out in columns that collapsed \
+into flat text (e.g. a two-column attendee list flattened by PDF extraction). Read each "Name, Title" as one \
+atomic pair in that left-to-right order; do not let a title word from one pair get attached to the name of \
+the next pair. For example, the flattened line \
+"Joe Schroeder, Mayor Meredith Hart, Economic Development Manager" contains TWO pairs -- (Joe Schroeder, \
+Mayor) and (Meredith Hart, Economic Development Manager) -- not one pair "Mayor Meredith Hart". If you \
+cannot confidently tell where one pair ends and the next begins, extract nothing for that ambiguous span \
+rather than guessing a pairing, and prefer evidence_mode "inferred" or skipping over a swapped subject/object.
+
 evidence_mode must be one of: "explicit" (the text directly states this fact), "derived" (the text states \
 something else that implies this, e.g. a vote result implies an appointment), "inferred" (a weaker inference \
 you are less certain of -- prefer not extracting rather than inferring).
@@ -284,7 +295,7 @@ PROMPT_DEFAULTS = [
     ),
     dict(
         prompt_key="org_assertion_extraction",
-        prompt_version="v1",
+        prompt_version="v2",
         task_type="org_assertion_extraction",
         prompt_text=ORG_ASSERTION_EXTRACTION_PROMPT,
         model_name=None,
