@@ -69,11 +69,17 @@ first implementation pass deliberately left out.
 - **Minimal read API** (`routers.py`): all eight endpoints listed in the
   PRD, including point-in-time structure (`?at=YYYY-MM-DD`) with resolved
   position occupants.
-- **Dashboard UI** (`dashboard.py` + `templates/organization_{list,detail,review}.html`):
+- **Dashboard UI** (`dashboard.py` + `templates/organization_{list,detail,review,changes}.html`
+  + `templates/entity_detail.html`):
   `/organizations` (list, with a pending-review badge per org),
-  `/organizations/{id}` (current structure, or `?at=` for a past date),
+  `/organizations/{id}` (current structure, or `?at=` for a past date, with
+  every position/occupant cross-linked to its entity detail page),
   `/organizations/{id}/review` (pending events with evidence, source-document
-  links, and Approve/Reject/Defer). **Approving now applies the event's
+  links, and Approve/Reject/Defer), `/organizations/{id}/changes` (reviewed
+  events -- approved/rejected/deferred -- filterable by type/certainty/
+  status), `/entities/{id}` (one person/position/unit's full relationship
+  history in both directions, associated events, and source assertions).
+  **Approving now applies the event's
   underlying relationship to accepted state in the same transaction**
   (`service._apply_approved_event`) -- the PRD's "Acceptance is
   transactional... commit together." Added while building the UI, since
@@ -156,14 +162,11 @@ auto-applies without review.
   matching across a fixed type-priority order (person, then position,
   unit, organization) -- a real ambiguity (two people with the same name)
   isn't disambiguated by context today.
-- **Change log page**: the PRD's "Change log" (filterable history of
-  approved events) doesn't exist yet -- only the pending-review queue does.
-  Approved/rejected events are still queryable via the API
-  (`GET /organizations/{id}/events`), just not through a dedicated page.
-- **Entity detail page**: the PRD's "Entity detail" (occupancy history,
-  aliases, associated events for one person/position/unit) doesn't exist
-  yet -- `/organizations/{id}` shows the whole org's current structure,
-  not a focused single-entity view.
+- **"Before/after state" on the change log**: the PRD's Change log spec
+  says "every approved entry opens to before/after state" -- there's no
+  stored snapshot pair to diff against, so `/organizations/{id}/changes`
+  shows the event's narrative and evidence plus a link to the affected
+  entity's *current* state, not a captured before/after comparison.
 - **Ventura source configuration** (`cities/ventura/organization_sources.py`
   in the PRD's implementation boundary): `run_batch` processes every
   parsed document sharing a tracked organization's jurisdiction string --

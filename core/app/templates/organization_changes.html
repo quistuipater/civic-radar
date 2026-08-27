@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Change Log — {{ entity.canonical_name }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Change Log: {{ entity.canonical_name }}</h1>
+<p class="muted">
+  <a class="link" href="/organizations/{{ entity.id }}">&larr; structure</a>
+  · <a class="link" href="/organizations/{{ entity.id }}/review">review queue</a>
+</p>
+
+<div class="panel">
+  <form method="get" action="/organizations/{{ entity.id }}/changes">
+    <label style="display:inline-block;margin-right:1.5rem;">Event type
+      <select name="event_type">
+        <option value="">any</option>
+        {% for t in event_types %}
+        <option value="{{ t }}" {{ "selected" if filters.event_type == t else "" }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="display:inline-block;margin-right:1.5rem;">Certainty
+      <select name="certainty">
+        <option value="">any</option>
+        {% for c in ("high", "medium", "low") %}
+        <option value="{{ c }}" {{ "selected" if filters.certainty == c else "" }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="display:inline-block;">Review status
+      <select name="review_status">
+        <option value="">any</option>
+        {% for s in ("approved", "rejected", "deferred") %}
+        <option value="{{ s }}" {{ "selected" if filters.review_status == s else "" }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" style="margin-left:1rem">Filter</button>
+    <a class="link" href="/organizations/{{ entity.id }}/changes" style="margin-left:0.75rem">clear</a>
+  </form>
+</div>
+
+{% if event_context %}
+{% for ctx in event_context %}
+<div class="panel">
+  <p>
+    {% if ctx.event.review_status == 'approved' %}<span class="badge level-1">approved</span>
+    {% elif ctx.event.review_status == 'rejected' %}<span class="badge level-4">rejected</span>
+    {% else %}<span class="badge level-2">deferred</span>{% endif %}
+    <span class="badge level-3">{{ ctx.event.event_type }}</span>
+    <strong>{{ ctx.event.title }}</strong>
+    <span class="muted">— certainty: {{ ctx.event.certainty }}, observed {{ ctx.event.observed_date }}{% if ctx.event.effective_date %}, effective {{ ctx.event.effective_date }}{% endif %}</span>
+  </p>
+  <p>{{ ctx.event.narrative }}</p>
+  {% if ctx.event.reviewer_note %}<p class="muted">Reviewer note: {{ ctx.event.reviewer_note }}</p>{% endif %}
+  {% if ctx.affected %}
+  <p class="muted">Affects:
+    {% for e in ctx.affected %}<a class="link" href="/entities/{{ e.id }}">{{ e.canonical_name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if ctx.assertions %}
+  <ul>
+    {% for a in ctx.assertions %}
+    <li class="muted">{{ a.subject_text }} — {{ a.predicate }} — {{ a.object_text or '' }} · <a class="link" href="/documents/{{ a.document_id }}">source</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<p class="empty">No reviewed changes match this filter.</p>
+{% endif %}
+{% endblock %}

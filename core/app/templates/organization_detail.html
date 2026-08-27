@@ -8,6 +8,7 @@
   {% if pending_count %}
     · <a class="link" href="/organizations/{{ entity.id }}/review"><span class="badge level-3">{{ pending_count }} pending review</span></a>
   {% endif %}
+  · <a class="link" href="/organizations/{{ entity.id }}/changes">change log</a>
 </p>
 
 <form method="get" action="/organizations/{{ entity.id }}" class="panel">
@@ -26,11 +27,11 @@
   <tr><th>Position</th><th>Type</th><th>Occupant(s)</th><th>Status</th></tr>
   {% for p in positions %}
   <tr>
-    <td>{{ p.version.title }}</td>
+    <td><a class="link" href="/entities/{{ p.entity.id }}">{{ p.version.title }}</a></td>
     <td class="muted">{{ p.version.position_type }}</td>
     <td>
       {% if p.occupants %}
-        {% for o in p.occupants %}{{ o.canonical_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% for o in p.occupants %}<a class="link" href="/entities/{{ o.id }}">{{ o.canonical_name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
       {% else %}<span class="muted">vacant</span>{% endif %}
     </td>
     <td class="muted">{{ p.version.status }}</td>

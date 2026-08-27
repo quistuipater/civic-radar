@@ -98,6 +98,18 @@ def organization_detail_page(entity_id: uuid.UUID, request: Request, at: date | 
     )
 
 
+def _event_context(db: Session, event: OrgEvent) -> dict:
+    assertion_ids = [
+        r.assertion_id for r in db.query(OrgEventAssertion).filter(OrgEventAssertion.event_id == event.id).all()
+    ]
+    assertions = (
+        db.query(OrgSourceAssertion).filter(OrgSourceAssertion.id.in_(assertion_ids)).all() if assertion_ids else []
+    )
+    entity_ids = [r.entity_id for r in db.query(OrgEventEntity).filter(OrgEventEntity.event_id == event.id).all()]
+    affected = db.query(Entity).filter(Entity.id.in_(entity_ids)).all() if entity_ids else []
+    return {"event": event, "assertions": assertions, "affected": affected}
+
+
 @router.get("/organizations/{entity_id}/review")
 def organization_review_page(entity_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     entity = db.get(Entity, entity_id)
@@ -107,20 +119,114 @@ def organization_review_page(entity_id: uuid.UUID, request: Request, db: Session
         .order_by(OrgEvent.observed_date.desc())
         .all()
     )
-    event_context = []
-    for event in events:
-        assertion_ids = [
-            r.assertion_id for r in db.query(OrgEventAssertion).filter(OrgEventAssertion.event_id == event.id).all()
-        ]
-        assertions = db.query(OrgSourceAssertion).filter(OrgSourceAssertion.id.in_(assertion_ids)).all() if assertion_ids else []
-        entity_ids = [
-            r.entity_id for r in db.query(OrgEventEntity).filter(OrgEventEntity.event_id == event.id).all()
-        ]
-        affected = db.query(Entity).filter(Entity.id.in_(entity_ids)).all() if entity_ids else []
-        event_context.append({"event": event, "assertions": assertions, "affected": affected})
+    event_context = [_event_context(db, event) for event in events]
 
     return templates.TemplateResponse(
         "organization_review.html", {"request": request, "entity": entity, "event_context": event_context}
+    )
+
+
+@router.get("/organizations/{entity_id}/changes")
+def organization_changes_page(
+    entity_id: uuid.UUID,
+    request: Request,
+    event_type: str = "",
+    certainty: str = "",
+    review_status: str = "",
+    db: Session = Depends(get_db),
+):
+    """PRD "Change log": reviewed events (approved/rejected/deferred), not
+    pending ones -- /review is where pending items live. Filterable by
+    event type, certainty, and review status; each entry shows the
+    evidence and, for an approved event, links to the relationship it
+    created (routers.py's read endpoints already expose that -- no
+    separate before/after snapshot table exists to diff against, so
+    "before/after state" per the PRD is shown as "what changed and its
+    current accepted state," not a stored snapshot pair).
+    """
+    entity = db.get(Entity, entity_id)
+    query = db.query(OrgEvent).filter(
+        OrgEvent.organization_entity_id == entity_id, OrgEvent.review_status != "pending"
+    )
+    if event_type:
+        query = query.filter(OrgEvent.event_type == event_type)
+    if certainty:
+        query = query.filter(OrgEvent.certainty == certainty)
+    if review_status:
+        query = query.filter(OrgEvent.review_status == review_status)
+    events = query.order_by(OrgEvent.observed_date.desc()).all()
+    event_context = [_event_context(db, event) for event in events]
+
+    event_types = [
+        r[0] for r in db.query(OrgEvent.event_type).filter(OrgEvent.organization_entity_id == entity_id).distinct().all()
+    ]
+
+    return templates.TemplateResponse(
+        "organization_changes.html",
+        {
+            "request": request,
+            "entity": entity,
+            "event_context": event_context,
+            "event_types": event_types,
+            "filters": {"event_type": event_type, "certainty": certainty, "review_status": review_status},
+        },
+    )
+
+
+@router.get("/entities/{entity_id}")
+def entity_detail_page(entity_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
+    """PRD "Entity detail": accepted state, occupancy/membership history
+    (open and closed relationships alike, not just the current one),
+    associated events, and source assertions -- for one person, position,
+    or unit, as opposed to /organizations/{id}'s whole-org structure view.
+    """
+    from app.organization_tracker.models import OrgRelationship
+
+    entity = db.get(Entity, entity_id)
+
+    as_subject = (
+        db.query(OrgRelationship)
+        .filter(OrgRelationship.subject_entity_id == entity_id)
+        .order_by(OrgRelationship.valid_from.desc())
+        .all()
+    )
+    as_object = (
+        db.query(OrgRelationship)
+        .filter(OrgRelationship.object_entity_id == entity_id)
+        .order_by(OrgRelationship.valid_from.desc())
+        .all()
+    )
+    other_ids = {r.object_entity_id for r in as_subject} | {r.subject_entity_id for r in as_object}
+    other_entities = {e.id: e for e in db.query(Entity).filter(Entity.id.in_(other_ids)).all()} if other_ids else {}
+
+    event_ids = [r.event_id for r in db.query(OrgEventEntity).filter(OrgEventEntity.entity_id == entity_id).all()]
+    events = (
+        db.query(OrgEvent).filter(OrgEvent.id.in_(event_ids)).order_by(OrgEvent.observed_date.desc()).all()
+        if event_ids
+        else []
+    )
+
+    assertions = (
+        db.query(OrgSourceAssertion)
+        .filter(
+            (OrgSourceAssertion.subject_entity_id == entity_id) | (OrgSourceAssertion.object_entity_id == entity_id)
+        )
+        .order_by(OrgSourceAssertion.observed_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "entity_detail.html",
+        {
+            "request": request,
+            "entity": entity,
+            "as_subject": as_subject,
+            "as_object": as_object,
+            "other_entities": other_entities,
+            "events": events,
+            "assertions": assertions,
+        },
     )
 
 

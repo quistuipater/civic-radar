@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ entity.canonical_name }} — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>{{ entity.canonical_name }}</h1>
+<p class="muted">{{ entity.entity_type }}{% if entity.aliases %} — aliases: {{ entity.aliases | join(', ') }}{% endif %}</p>
+
+<h2>Relationships</h2>
+{% if as_subject %}
+<table>
+  <tr><th>Type</th><th>Related to</th><th>Valid from</th><th>Valid to</th></tr>
+  {% for r in as_subject %}
+  <tr>
+    <td>{{ r.relationship_type }}</td>
+    <td>
+      {% set other = other_entities.get(r.object_entity_id) %}
+      {% if other %}<a class="link" href="/entities/{{ other.id }}">{{ other.canonical_name }}</a>{% else %}—{% endif %}
+    </td>
+    <td class="muted">{{ r.valid_from }}</td>
+    <td class="muted">{{ r.valid_to or 'current' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No relationships recorded where this entity is the subject.</p>
+{% endif %}
+
+{% if as_object %}
+<h3>Held by</h3>
+<table>
+  <tr><th>Type</th><th>Holder</th><th>Valid from</th><th>Valid to</th></tr>
+  {% for r in as_object %}
+  <tr>
+    <td>{{ r.relationship_type }}</td>
+    <td>
+      {% set other = other_entities.get(r.subject_entity_id) %}
+      {% if other %}<a class="link" href="/entities/{{ other.id }}">{{ other.canonical_name }}</a>{% else %}—{% endif %}
+    </td>
+    <td class="muted">{{ r.valid_from }}</td>
+    <td class="muted">{{ r.valid_to or 'current' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<h2>Associated events</h2>
+{% if events %}
+<table>
+  <tr><th>Status</th><th>Type</th><th>Title</th><th>Observed</th></tr>
+  {% for e in events %}
+  <tr>
+    <td>
+      {% if e.review_status == 'pending' %}<span class="badge level-3">pending</span>
+      {% elif e.review_status == 'approved' %}<span class="badge level-1">approved</span>
+      {% elif e.review_status == 'rejected' %}<span class="badge level-4">rejected</span>
+      {% else %}<span class="badge level-2">deferred</span>{% endif %}
+    </td>
+    <td class="muted">{{ e.event_type }}</td>
+    <td>{{ e.title }}</td>
+    <td class="muted">{{ e.observed_date }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No events reference this entity.</p>
+{% endif %}
+
+<h2>Source assertions</h2>
+{% if assertions %}
+<table>
+  <tr><th>Claim</th><th>Evidence</th><th>Document</th></tr>
+  {% for a in assertions %}
+  <tr>
+    <td>{{ a.subject_text }} — {{ a.predicate }} — {{ a.object_text or '' }}</td>
+    <td class="muted">{{ a.evidence_mode }}{% if a.confidence %} ({{ a.confidence }}){% endif %}</td>
+    <td><a class="link" href="/documents/{{ a.document_id }}">source</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No source assertions reference this entity.</p>
+{% endif %}
+{% endblock %}
