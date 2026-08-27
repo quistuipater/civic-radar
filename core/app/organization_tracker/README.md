@@ -80,6 +80,32 @@ first implementation pass deliberately left out.
   had covered yet (see below) and confirming the fixes against the actual
   documents that had triggered them.
 
+## Ventura baseline
+
+`cities/ventura/organization_baseline.py` seeds a reviewed baseline (PRD
+MVP goal #1) directly through `service.py`, not the assertion/review
+pipeline -- this is an operator asserting already-known state, not AI
+output awaiting review. Every name/title was verified live 2026-08-27
+against two independent sources: the City's own directory pages
+(cityofventura.ca.gov) and real archived Council minutes already in this
+project's document archive. Currently seeded: City of Ventura, all 7
+Council district seats + Mayor/Deputy Mayor (rotating titles, not
+separate seats -- see the script's docstring), City Manager, City
+Attorney, City Clerk, and their current occupants (10 people total). Run
+once, live, via `docker cp` + `docker exec ... python organization_baseline.py`
+(not yet wired into `seed_sources.py`'s bind-mount pattern -- a one-off
+so far, not part of the regular per-city deploy flow).
+
+Running `pipeline.run_batch` against this baseline live confirmed the
+whole loop works correctly: a real Council minutes document restating
+already-known facts (10 assertions) produced **zero** drafted events (all
+correctly classified CONFIRMING) -- and a second real document produced
+exactly one event, which turned out to be a genuine AI extraction error
+(misattributed Bill Ayub to City Attorney instead of City Manager, from a
+bare table-header line with no name on it). That event sat `pending` for
+human review rather than silently corrupting accepted state -- exactly
+the safety behavior the whole design exists for.
+
 ## Known limitations (real, found during live testing -- not yet fixed)
 
 - **AI extraction is not always valid JSON.** On real (longer/more complex)
