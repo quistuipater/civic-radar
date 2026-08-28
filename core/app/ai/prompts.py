@@ -179,6 +179,14 @@ Mayor) and (Meredith Hart, Economic Development Manager) -- not one pair "Mayor 
 cannot confidently tell where one pair ends and the next begins, extract nothing for that ambiguous span \
 rather than guessing a pairing, and prefer evidence_mode "inferred" or skipping over a swapped subject/object.
 
+Not every claim involves a named person -- "appoints", "oversees", "reports_to_position", \
+"unit_reports_to_unit", and "part_of" are often stated purely between roles/bodies/units, with no individual's \
+name in the sentence at all. For example, the sentence "The City Council hires 2 of the principal officials \
+of the City, the City Manager and the City Attorney" contains TWO valid "appoints" claims even though no \
+person is named: (City Council, appoints, City Manager) and (City Council, appoints, City Attorney) -- \
+subject_text and object_text here are role/body names ("City Council", "City Manager"), not people. Do not \
+skip a clearly-stated institutional relationship just because it lacks a named individual.
+
 evidence_mode must be one of: "explicit" (the text directly states this fact), "derived" (the text states \
 something else that implies this, e.g. a vote result implies an appointment), "inferred" (a weaker inference \
 you are less certain of -- prefer not extracting rather than inferring).
@@ -295,7 +303,7 @@ PROMPT_DEFAULTS = [
     ),
     dict(
         prompt_key="org_assertion_extraction",
-        prompt_version="v2",
+        prompt_version="v3",
         task_type="org_assertion_extraction",
         prompt_text=ORG_ASSERTION_EXTRACTION_PROMPT,
         model_name=None,
