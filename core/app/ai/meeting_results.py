@@ -63,7 +63,9 @@ def extract_meeting_results(db: Session, document: Document) -> AiOutput | None:
         meeting_date=document.meeting_date or "",
         text=text[:MAX_CHARS],
     )
-    output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, timeout=180.0)
+    output_json, error = ollama_client.generate_json(
+        prompt_row.model_name, prompt, timeout=180.0, options=prompt_row.model_params
+    )
 
     ai_output = AiOutput(
         task_type="meeting_results_summary",

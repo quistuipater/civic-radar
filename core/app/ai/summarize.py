@@ -35,7 +35,7 @@ def summarize_document(db: Session, document: Document) -> AiOutput | None:
             jurisdiction=document.jurisdiction or "",
             text=text[:MAX_CHARS],
         )
-        output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt)
+        output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
     else:
         error = "ollama unavailable; no summary generated (Phase 0 has no non-AI summary fallback)"
 

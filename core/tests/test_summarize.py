@@ -26,7 +26,7 @@ class TestSummarizeDocument:
     def test_uses_model_output_when_ollama_available(self, db, monkeypatch):
         monkeypatch.setattr(summarize_module.ollama_client, "is_available", lambda: True)
         model_output = {"plain_english_summary": "This is what happened.", "source_confidence": "high"}
-        monkeypatch.setattr(summarize_module.ollama_client, "generate_json", lambda model, prompt: (model_output, None))
+        monkeypatch.setattr(summarize_module.ollama_client, "generate_json", lambda model, prompt, **k: (model_output, None))
         make_prompt(db, prompt_key="document_summary", model_name="triage-model", prompt_text="{title} {jurisdiction} {text}")
         document = make_document(db, title="June Agenda")
         db.commit()
@@ -56,7 +56,7 @@ class TestSummarizeDocument:
     def test_records_an_error_when_model_call_fails(self, db, monkeypatch):
         monkeypatch.setattr(summarize_module.ollama_client, "is_available", lambda: True)
         monkeypatch.setattr(
-            summarize_module.ollama_client, "generate_json", lambda model, prompt: (None, "model returned invalid JSON")
+            summarize_module.ollama_client, "generate_json", lambda model, prompt, **k: (None, "model returned invalid JSON")
         )
         make_prompt(db, prompt_key="document_summary", prompt_text="{title} {jurisdiction} {text}")
         document = make_document(db, title="June Agenda")
@@ -72,7 +72,7 @@ class TestSummarizeDocument:
         seen_prompts = []
         monkeypatch.setattr(summarize_module.ollama_client, "is_available", lambda: True)
 
-        def fake_generate(model, prompt):
+        def fake_generate(model, prompt, **k):
             seen_prompts.append(prompt)
             return {"plain_english_summary": "ok"}, None
 

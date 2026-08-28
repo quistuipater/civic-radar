@@ -54,7 +54,9 @@ def extract_agenda_items(db: Session, document: Document) -> None:
         meeting_date=document.meeting_date or "",
         text=text[:MAX_CHARS],
     )
-    output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, timeout=180.0)
+    output_json, error = ollama_client.generate_json(
+        prompt_row.model_name, prompt, timeout=180.0, options=prompt_row.model_params
+    )
 
     db.add(
         AiOutput(

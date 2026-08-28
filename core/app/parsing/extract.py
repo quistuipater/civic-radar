@@ -197,11 +197,38 @@ def _vision_ocr_page(image) -> str | None:
     return text
 
 
+# Site chrome (nav menus, footers, breadcrumbs, cookie banners) dilutes a
+# short informational page's real content badly enough to hurt downstream AI
+# extraction -- confirmed live 2026-08-27 on a real Ventura page where a two-
+# sentence claim buried in ~80% boilerplate produced inconsistent extraction
+# results (see organization_tracker/README.md's "Known limitations"). These
+# tag/class names are common across generic HTML sites (semantic <nav>/
+# <header>/<footer>/<aside>) plus a few widely-used CMS conventions
+# (CivicPlus, WordPress) rather than anything Ventura-specific, so this
+# applies to every HTML source, not just organization_tracker's.
+_BOILERPLATE_TAGS = ("script", "style", "noscript", "nav", "header", "footer", "aside")
+_BOILERPLATE_CLASS_HINTS = ("breadcrumb", "menu", "navbar", "sidebar", "skip-link", "cookie", "quicklinks")
+_MAIN_CONTENT_SELECTORS = ("main", "#main", "#content", ".main-content", "article")
+
+
 def _parse_html(path: Path) -> ParsedDocument:
     soup = BeautifulSoup(path.read_text(errors="ignore"), "lxml")
-    for tag in soup(["script", "style"]):
+    for tag in soup(_BOILERPLATE_TAGS):
         tag.decompose()
-    text = soup.get_text("\n", strip=True)
+    for hint in _BOILERPLATE_CLASS_HINTS:
+        for tag in soup.select(f'[class*="{hint}"], [id*="{hint}"]'):
+            tag.decompose()
+
+    content_root = None
+    for selector in _MAIN_CONTENT_SELECTORS:
+        content_root = soup.select_one(selector)
+        if content_root is not None:
+            break
+    # Fall back to the whole (already-stripped) document if no recognizable
+    # main-content container exists -- better to keep some boilerplate than
+    # to silently drop real content a differently-structured site puts
+    # somewhere this heuristic doesn't recognize.
+    text = (content_root or soup).get_text("\n", strip=True)
     return ParsedDocument(full_text=text, pages=[ParsedPage(1, text)])
 
 

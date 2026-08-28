@@ -33,7 +33,7 @@ def test_process_document_extracts_and_drafts_events(db, monkeypatch, tmp_path):
             }
         ]
     }
-    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt: (model_output, None))
+    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt, **k: (model_output, None))
 
     result = pipeline.process_document_for_organization(db, document, ventura.id)
 

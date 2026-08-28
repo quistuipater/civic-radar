@@ -118,7 +118,7 @@ class TestExtractMeetingResults:
         seen_prompts = []
         monkeypatch.setattr(meeting_results_module.ollama_client, "is_available", lambda: True)
 
-        def fake_generate(model, prompt, timeout=None):
+        def fake_generate(model, prompt, timeout=None, **k):
             seen_prompts.append(prompt)
             return {"overall_summary": "ok", "key_decisions": [], "source_confidence": "high"}, None
 

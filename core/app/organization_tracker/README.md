@@ -217,17 +217,42 @@ auto-applies without review.
 
 ## Known limitations (real, found during live testing -- not yet fixed)
 
-- **Extraction on a real `static_reference_page` document is unreliable
-  when the useful sentence is diluted by page boilerplate.** See the
-  Ventura baseline section's "Update, same day" note -- the real
-  Form-of-Government page (~80% nav/footer/subcommittee-list noise around
-  two real sentences) produced correct assertions on some retries and
-  empty output on others against the identical prompt/model. Because
-  `run_batch` marks a document processed even at zero assertions (so it
-  isn't retried forever), a single unlucky attempt means that page's
-  content won't be re-attempted until it actually changes. Stripping
-  boilerplate before extraction, or extracting per-chunk instead of the
-  whole page, would likely help but hasn't been tried.
+- **Extraction on the real Form-of-Government `static_reference_page`
+  document is unreliable, and the root cause turned out to be more
+  interesting than noisy text.** Two things were tried, in order, both
+  verified live rather than assumed to have worked:
+  1. **Boilerplate stripping** (`parsing/extract.py`'s `_parse_html` now
+     drops `nav`/`header`/`footer`/`aside` and common CMS chrome classes,
+     preferring a `<main>`/`#content`/`article` region when present) --
+     cut the real page from 2814 to 1592 chars, correctly removing most of
+     the subcommittee-list/footer noise.
+  2. **A real, separate bug found while investigating**: `Prompt.model_params`
+     (every extraction task's tuned temperature, e.g. 0.1 for
+     `org_assertion_extraction`) was stored in the database but never
+     actually sent to Ollama anywhere in the codebase -- `ollama_client.generate_json`
+     had no `options` parameter, so every AI call in the app (classification,
+     summarization, agenda-item extraction, meeting-results, org extraction)
+     silently ran at Ollama's default temperature instead of its configured
+     one. Fixed: `generate_json` now accepts `options` and all 5 call
+     sites pass `prompt_row.model_params` through.
+
+  The surprising result: with temperature actually wired to 0.1 (near-
+  deterministic), the real page's extraction went from *occasionally*
+  correct (roughly 1 in 9 attempts, pre-fix) to *consistently empty*
+  (0 of 5 retries, post-fix) -- worse by naive readthrough, but more
+  informative. It means the model's single most-likely completion for
+  this input is "extract nothing," and the earlier occasional successes
+  were higher-temperature sampling luck, not a signal that a cleaner
+  prompt would reliably unlock correct extraction. That reframes this
+  from an infrastructure/noise problem (fixable by better plumbing) to a
+  genuine model/prompt-tuning limitation on this specific input shape,
+  which is a different, harder problem than either fix above addressed --
+  not chased further here. The temperature-wiring fix is kept regardless:
+  it's a real bug affecting every AI call in the app, independent of
+  whether it happens to help this one document. Because `run_batch` marks
+  a document processed even at zero assertions (so it isn't retried
+  forever), this page's content won't be re-attempted until it actually
+  changes.
 - **Multi-column rosters flattened onto one line can still mis-pair names
   and titles**, even after the `org_assertion_extraction` prompt (v2, added
   2026-08-27) was tightened with an explicit rule and worked example. The

@@ -58,7 +58,7 @@ def test_creates_assertions_from_model_output_and_resolves_known_entities(db, mo
             }
         ]
     }
-    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt: (model_output, None))
+    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt, **k: (model_output, None))
 
     created = extraction.extract_assertions_from_document(db, document)
 
@@ -79,7 +79,7 @@ def test_incomplete_model_rows_are_skipped_not_guessed(db, monkeypatch):
     document = make_document(db)
 
     model_output = {"assertions": [{"subject_text": "Jane Smith"}]}  # missing predicate/evidence_mode/type
-    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt: (model_output, None))
+    monkeypatch.setattr(extraction_module.ollama_client, "generate_json", lambda model, prompt, **k: (model_output, None))
 
     assert extraction.extract_assertions_from_document(db, document) == []
 
@@ -89,7 +89,7 @@ def test_model_error_yields_no_assertions_not_a_crash(db, monkeypatch):
     monkeypatch.setattr(extraction_module.ollama_client, "is_available", lambda: True)
     document = make_document(db)
     monkeypatch.setattr(
-        extraction_module.ollama_client, "generate_json", lambda model, prompt: (None, "model returned invalid JSON")
+        extraction_module.ollama_client, "generate_json", lambda model, prompt, **k: (None, "model returned invalid JSON")
     )
 
     assert extraction.extract_assertions_from_document(db, document) == []

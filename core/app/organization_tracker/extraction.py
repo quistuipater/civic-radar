@@ -79,7 +79,7 @@ def extract_assertions_from_document(db: Session, document: Document) -> list[Or
         agency=document.agency or "",
         text=text[:MAX_CHARS],
     )
-    output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt)
+    output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
     if error or not output_json:
         if error:
             logger.warning("org assertion extraction failed for document %s: %s", document.id, error)

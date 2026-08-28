@@ -84,7 +84,7 @@ class TestTriggerSummarization:
         monkeypatch.setattr(
             summarize_module.ollama_client,
             "generate_json",
-            lambda model, prompt: ({"plain_english_summary": "It happened."}, None),
+            lambda model, prompt, **k: ({"plain_english_summary": "It happened."}, None),
         )
         make_prompt(db, prompt_key="document_summary", prompt_text="{title} {jurisdiction} {text}")
         document = make_document(db, title="June Agenda")

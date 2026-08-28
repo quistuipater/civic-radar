@@ -14,7 +14,7 @@ class TestClassifyDocument:
     def test_uses_model_output_when_prompt_configured_and_ollama_available(self, db, monkeypatch):
         monkeypatch.setattr(classify_module.ollama_client, "is_available", lambda: True)
         model_output = {"confidence": "high", "importance_score": 7}
-        monkeypatch.setattr(classify_module.ollama_client, "generate_json", lambda model, prompt: (model_output, None))
+        monkeypatch.setattr(classify_module.ollama_client, "generate_json", lambda model, prompt, **k: (model_output, None))
         make_prompt(
             db,
             prompt_key="agenda_item_classification",
@@ -36,7 +36,7 @@ class TestClassifyDocument:
     def test_falls_back_to_heuristic_when_model_call_fails(self, db, monkeypatch):
         monkeypatch.setattr(classify_module.ollama_client, "is_available", lambda: True)
         monkeypatch.setattr(
-            classify_module.ollama_client, "generate_json", lambda model, prompt: (None, "model returned invalid JSON")
+            classify_module.ollama_client, "generate_json", lambda model, prompt, **k: (None, "model returned invalid JSON")
         )
         make_prompt(
             db,
@@ -67,7 +67,7 @@ class TestClassifyDocument:
         seen_prompts = []
         monkeypatch.setattr(classify_module.ollama_client, "is_available", lambda: True)
 
-        def fake_generate(model, prompt):
+        def fake_generate(model, prompt, **k):
             seen_prompts.append(prompt)
             return {"confidence": "high"}, None
 
