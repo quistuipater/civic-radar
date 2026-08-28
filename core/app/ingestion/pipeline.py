@@ -18,6 +18,7 @@ from app.ingestion.connectors import (
     netfile_rss,
     ocpf,
     primegov,
+    static_page,
 )
 from app.ingestion.connectors.base import DiscoveredDocument
 from app.ingestion.http_client import fetch_url
@@ -32,6 +33,7 @@ CONNECTORS = {
     "netfile_rss": netfile_rss.discover,
     "ocpf": ocpf.discover,
     "boston_public_notices": boston_public_notices.discover,
+    "static_page": static_page.discover,
 }
 
 EXT_BY_CONTENT_TYPE = {
@@ -74,6 +76,13 @@ def ingest_source(db: Session, source: Source) -> Fetch:
     snapshot_path = write_archive_file(directory, f"source_snapshot_{page_hash[:12]}.html", body)
     fetch.archive_path = str(snapshot_path)
 
+    # Ordinary sources link out to PDFs to harvest, so the page itself is
+    # just a change-detection snapshot (parsing it would be pure waste --
+    # see _upsert_document). A "static_reference_page" source is the
+    # opposite: the page's own prose IS the payload (e.g. a "Form of
+    # Government" page stating who reports to whom), so it needs to flow
+    # through parsing/AI extraction like a real document.
+    is_static_reference_page = source.source_type == "static_reference_page"
     snapshot_doc, snapshot_is_new = _upsert_document(
         db,
         source=source,
@@ -81,7 +90,7 @@ def ingest_source(db: Session, source: Source) -> Fetch:
         archive_path=snapshot_path,
         content=body,
         content_hash=page_hash,
-        document_type="source_page_snapshot",
+        document_type="informational_page" if is_static_reference_page else "source_page_snapshot",
         title=f"{source.name} — page snapshot",
         original_url=source.url,
         mime_type=response.headers.get("content-type", "text/html").split(";")[0],
@@ -114,10 +123,13 @@ def ingest_source(db: Session, source: Source) -> Fetch:
     if connector_crashed:
         fetch.validation_status = "error"
         fetch.validation_message = f"connector {source.connector} raised: {connector_error}"
-    elif len(discovered) == 0:
+    elif len(discovered) == 0 and not is_static_reference_page:
         fetch.validation_status = "empty"
         fetch.validation_message = "connector ran but discovered 0 links -- source page may have changed structure"
     else:
+        # A static_reference_page source discovering 0 linked documents is
+        # expected (its payload is the page snapshot itself, not a link),
+        # not a sign the page's structure broke.
         fetch.validation_status = "ok"
 
     fetch.duration_ms = int((time.monotonic() - started) * 1000)

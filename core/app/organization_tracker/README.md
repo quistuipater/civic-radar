@@ -160,6 +160,43 @@ source today (Ventura's sources are AgendaCenter agendas/minutes), which
 is why this was seeded manually rather than picked up automatically.
 Adding those pages as real sources is a natural next step, not done here.
 
+**Update, same day**: that next step was taken -- `cityofventura.ca.gov/287/Form-of-Government`
+is now a real `Source` (`source_type="static_reference_page"`, a new
+`connector="static_page"` in `ingestion/pipeline.py`). Ordinary sources
+only harvest *linked* PDFs and treat their own page as a disposable
+change-detection snapshot (`document_type="source_page_snapshot"`,
+`parser_status="skipped"` -- parsing it would be pure waste, see
+`_upsert_document`'s comment). A `static_reference_page` source is the
+opposite: the page's own prose is the payload, so its snapshot gets
+`document_type="informational_page"` and flows through parsing/AI
+extraction like a real document; `static_page.discover()` always returns
+zero linked documents by design, and that's now treated as `validation_status="ok"`
+for this source type rather than the usual "connector may be broken" `"empty"`
+status.
+
+Wiring it up end-to-end surfaced a real reliability gap, tested honestly
+rather than declared working after one lucky run: fed the isolated,
+hand-picked sentence in a clean prompt, `org_assertion_extraction`
+reliably found both `appoints` claims (5/5 manual retries). Fed the
+*actual* parsed page text (2.8KB, ~80% site-navigation/footer/subcommittee-list
+boilerplate surrounding the two real sentences), the same prompt against
+the same model was inconsistent -- some direct-model retries returned the
+correct assertions, several returned `{"assertions": []}` or even `{}`
+with no assertions key at all. The live `run_batch` run landed on a
+zero-assertion attempt and marked the document processed
+(`OrgDocumentProcessing`, by design, so a document isn't retried forever)
+-- meaning that specific miss will NOT be retried automatically unless the
+page's content changes (new content hash) or someone manually clears its
+`OrgDocumentProcessing` row. The manually-seeded relationships from
+`organization_reporting_lines_baseline.py` remain the authoritative source
+of truth for what's on the dashboard today; this new source is a real,
+working discovery path for future changes to this page, not a guaranteed
+one. Worth revisiting if this pattern recurs on other static pages:
+stripping nav/footer boilerplate before extraction (BeautifulSoup
+main-content selection, or running extraction per `document_chunks` chunk
+instead of the whole page) would likely improve the signal-to-noise ratio,
+but that's real, untried work, not done here.
+
 Running `pipeline.run_batch` against this baseline live (both manually and
 via the worker's own tick loop, unattended) confirmed the whole loop works
 correctly: most real documents restating already-known facts correctly
@@ -180,6 +217,17 @@ auto-applies without review.
 
 ## Known limitations (real, found during live testing -- not yet fixed)
 
+- **Extraction on a real `static_reference_page` document is unreliable
+  when the useful sentence is diluted by page boilerplate.** See the
+  Ventura baseline section's "Update, same day" note -- the real
+  Form-of-Government page (~80% nav/footer/subcommittee-list noise around
+  two real sentences) produced correct assertions on some retries and
+  empty output on others against the identical prompt/model. Because
+  `run_batch` marks a document processed even at zero assertions (so it
+  isn't retried forever), a single unlucky attempt means that page's
+  content won't be re-attempted until it actually changes. Stripping
+  boilerplate before extraction, or extracting per-chunk instead of the
+  whole page, would likely help but hasn't been tried.
 - **Multi-column rosters flattened onto one line can still mis-pair names
   and titles**, even after the `org_assertion_extraction` prompt (v2, added
   2026-08-27) was tightened with an explicit rule and worked example. The

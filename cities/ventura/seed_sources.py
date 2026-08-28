@@ -337,6 +337,34 @@ SOURCES = [
             "full history. Pure config against the existing generic PDF harvester."
         ),
     ),
+    dict(
+        name="City of Ventura — Form of Government",
+        jurisdiction="City of Ventura",
+        agency="City Manager's Office",
+        body=None,
+        source_type="static_reference_page",
+        authority_level="official_primary",
+        url="https://www.cityofventura.ca.gov/287/Form-of-Government",
+        fetch_method="html_pdf_harvest",
+        connector="static_page",
+        polling_interval_minutes=10080,  # weekly -- this content changes rarely
+        parser_type=None,
+        notes=(
+            "Static informational page, not an agenda/minutes source -- its own "
+            "text states the Council/Manager reporting structure (\"The City "
+            "Council hires 2 of the principal officials of the City, the City "
+            "Manager and the City Attorney\"; the City Manager is \"responsible "
+            "to the City Council for... hiring and firing department heads\"). "
+            "Added 2026-08-27 after confirming live that the org_assertion_extraction "
+            "prompt correctly derives both appoints relationships from this exact "
+            "text (see organization_tracker/README.md). source_type "
+            "'static_reference_page' + connector 'static_page' route this "
+            "source's own page snapshot through parsing/AI extraction instead of "
+            "the usual skip-and-only-harvest-linked-PDFs behavior (see "
+            "ingestion/pipeline.py's is_static_reference_page branch) -- there's "
+            "nothing to harvest here, the page's own prose is the payload."
+        ),
+    ),
 ]
 
 
