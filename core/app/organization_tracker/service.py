@@ -445,3 +445,35 @@ def current_occupants(db: Session, position_entity_id: uuid.UUID, as_of: date | 
             OrgRelationship.valid_from <= as_of, (OrgRelationship.valid_to.is_(None)) | (OrgRelationship.valid_to > as_of)
         )
     return query.all()
+
+
+def reporting_context(db: Session, position_entity_id: uuid.UUID, as_of: date | None = None) -> dict:
+    """Who this position reports to (subject-side "reports_to_position") and
+    who appointed it (object-side "appoints"), each as-of a date. Neither is
+    guaranteed to exist -- most positions today have neither asserted.
+    """
+
+    def _open(query):
+        if as_of is None:
+            return query.filter(OrgRelationship.valid_to.is_(None))
+        return query.filter(
+            OrgRelationship.valid_from <= as_of, (OrgRelationship.valid_to.is_(None)) | (OrgRelationship.valid_to > as_of)
+        )
+
+    reports_to = _open(
+        db.query(Entity)
+        .join(OrgRelationship, OrgRelationship.object_entity_id == Entity.id)
+        .filter(
+            OrgRelationship.subject_entity_id == position_entity_id,
+            OrgRelationship.relationship_type == "reports_to_position",
+        )
+    ).first()
+    appointed_by = _open(
+        db.query(Entity)
+        .join(OrgRelationship, OrgRelationship.subject_entity_id == Entity.id)
+        .filter(
+            OrgRelationship.object_entity_id == position_entity_id,
+            OrgRelationship.relationship_type == "appoints",
+        )
+    ).first()
+    return {"reports_to": reports_to, "appointed_by": appointed_by}

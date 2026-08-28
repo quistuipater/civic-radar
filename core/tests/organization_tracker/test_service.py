@@ -280,3 +280,52 @@ def test_review_event_rejects_invalid_decision(db):
 
     with pytest.raises(ValueError):
         service.review_event(db, event.id, "maybe")
+
+
+def test_reporting_context_reflects_reports_to_and_appoints(db):
+    ventura = _make_ventura(db)
+    council = service.create_unit(
+        db, canonical_name="City Council", unit_type="legislative_body",
+        organization_entity_id=ventura.id, valid_from=date(2020, 1, 1),
+    )
+    city_manager = service.create_position(
+        db, title="City Manager", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2020, 1, 1),
+    )
+    finance_director = service.create_position(
+        db, title="Finance Director", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2020, 1, 1),
+    )
+    service.start_relationship(db, council.id, "appoints", city_manager.id, valid_from=date(2020, 1, 1))
+    service.start_relationship(
+        db, finance_director.id, "reports_to_position", city_manager.id, valid_from=date(2020, 1, 1)
+    )
+
+    manager_context = service.reporting_context(db, city_manager.id)
+    assert manager_context["reports_to"] is None
+    assert manager_context["appointed_by"].id == council.id
+
+    director_context = service.reporting_context(db, finance_director.id)
+    assert director_context["reports_to"].id == city_manager.id
+    assert director_context["appointed_by"] is None
+
+
+def test_reporting_context_respects_as_of_date(db):
+    ventura = _make_ventura(db)
+    city_manager = service.create_position(
+        db, title="City Manager", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2020, 1, 1),
+    )
+    finance_director = service.create_position(
+        db, title="Finance Director", position_type="appointed_executive",
+        organization_entity_id=ventura.id, valid_from=date(2020, 1, 1),
+    )
+    service.start_relationship(
+        db, finance_director.id, "reports_to_position", city_manager.id, valid_from=date(2023, 1, 1)
+    )
+
+    before = service.reporting_context(db, finance_director.id, as_of=date(2021, 1, 1))
+    assert before["reports_to"] is None
+
+    after = service.reporting_context(db, finance_director.id, as_of=date(2024, 1, 1))
+    assert after["reports_to"].id == city_manager.id

@@ -80,7 +80,17 @@ def organization_detail_page(entity_id: uuid.UUID, request: Request, at: date | 
     for pos_entity, version in position_rows:
         occupants = service.current_occupants(db, pos_entity.id, at)
         unit_name = unit_names_by_entity_id.get(version.unit_entity_id) if version.unit_entity_id else None
-        positions.append({"entity": pos_entity, "version": version, "occupants": occupants, "unit_name": unit_name})
+        reporting = service.reporting_context(db, pos_entity.id, at)
+        positions.append(
+            {
+                "entity": pos_entity,
+                "version": version,
+                "occupants": occupants,
+                "unit_name": unit_name,
+                "reports_to": reporting["reports_to"],
+                "appointed_by": reporting["appointed_by"],
+            }
+        )
 
     pending_count = db.query(OrgEvent).filter(
         OrgEvent.organization_entity_id == entity_id, OrgEvent.review_status == "pending"

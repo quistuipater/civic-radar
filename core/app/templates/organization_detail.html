@@ -24,7 +24,7 @@
 <h2>Positions</h2>
 {% if positions %}
 <table>
-  <tr><th>Position</th><th>Unit</th><th>Type</th><th>Occupant(s)</th><th>Status</th></tr>
+  <tr><th>Position</th><th>Unit</th><th>Type</th><th>Occupant(s)</th><th>Reports to / Appointed by</th><th>Status</th></tr>
   {% for p in positions %}
   <tr>
     <td><a class="link" href="/entities/{{ p.entity.id }}">{{ p.version.title }}</a></td>
@@ -34,6 +34,12 @@
       {% if p.occupants %}
         {% for o in p.occupants %}<a class="link" href="/entities/{{ o.id }}">{{ o.canonical_name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
       {% else %}<span class="muted">vacant</span>{% endif %}
+    </td>
+    <td class="muted">
+      {% if p.reports_to %}reports to <a class="link" href="/entities/{{ p.reports_to.id }}">{{ p.reports_to.canonical_name }}</a>{% endif %}
+      {% if p.reports_to and p.appointed_by %}<br>{% endif %}
+      {% if p.appointed_by %}appointed by <a class="link" href="/entities/{{ p.appointed_by.id }}">{{ p.appointed_by.canonical_name }}</a>{% endif %}
+      {% if not p.reports_to and not p.appointed_by %}—{% endif %}
     </td>
     <td class="muted">{{ p.version.status }}</td>
   </tr>

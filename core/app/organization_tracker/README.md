@@ -132,6 +132,34 @@ above. The organization detail page's positions table now shows each
 position's unit (renamed from "Council / Leadership" to "Positions" since
 it now mixes elected seats and department directors).
 
+`cities/ventura/organization_reporting_lines_baseline.py` (run after the
+above, 2026-08-27) adds the relationships that make the org structure
+legible, not just a flat position list: a real "City Council"
+`organizational_unit` entity (distinct from the 7 individual district
+seats) with `appoints` relationships to City Manager and City Attorney,
+and `reports_to_position` from each of the 10 department directors to
+City Manager -- both sourced directly from
+`cityofventura.ca.gov/287/Form-of-Government`'s own text ("The City
+Council hires 2 of the principal officials of the City, the City Manager
+and the City Attorney"; "[the City Manager is] responsible to the City
+Council for... hiring and firing department heads"). City Clerk is
+deliberately NOT linked to Council -- the source names only 2
+Council-appointed officials, so a third would be a guess. `service.py`
+gained `reporting_context()` (reports_to / appointed_by, as-of aware); the
+organization detail page's positions table now has a "Reports to /
+Appointed by" column, and the City Council unit's own `/entities/{id}`
+page shows both `appoints` relationships directly.
+
+Fed straight through the real `org_assertion_extraction` prompt (not the
+seed script), the Form-of-Government page's own text correctly produced
+both `appoints` assertions with the right subject/object direction and
+high confidence -- confirming the extraction pipeline could discover this
+structure on its own, but only for documents it actually ingests. Neither
+that page nor any other city informational/directory page is a configured
+source today (Ventura's sources are AgendaCenter agendas/minutes), which
+is why this was seeded manually rather than picked up automatically.
+Adding those pages as real sources is a natural next step, not done here.
+
 Running `pipeline.run_batch` against this baseline live (both manually and
 via the worker's own tick loop, unattended) confirmed the whole loop works
 correctly: most real documents restating already-known facts correctly
