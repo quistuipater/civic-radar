@@ -120,6 +120,18 @@ once, live, via `docker cp` + `docker exec ... python organization_baseline.py`
 (not yet wired into `seed_sources.py`'s bind-mount pattern -- a one-off
 so far, not part of the regular per-city deploy flow).
 
+`cities/ventura/organization_departments_baseline.py` (run after the above,
+2026-08-27) extends this with the 10 department/division-level units the
+first baseline pass left unpopulated -- Finance, HR, IT, Community
+Development, Fire, Parks & Recreation, Police, Public Works, Ventura
+Water, and Economic Development, each with a `Position`/occupant for its
+current director, verified the same way (city department pages plus at
+least one independent news source per name). Same idempotent,
+straight-through-`service.py` pattern and caveats as the council baseline
+above. The organization detail page's positions table now shows each
+position's unit (renamed from "Council / Leadership" to "Positions" since
+it now mixes elected seats and department directors).
+
 Running `pipeline.run_batch` against this baseline live (both manually and
 via the worker's own tick loop, unattended) confirmed the whole loop works
 correctly: most real documents restating already-known facts correctly

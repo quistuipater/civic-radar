@@ -75,10 +75,12 @@ def organization_detail_page(entity_id: uuid.UUID, request: Request, at: date | 
         PositionVersion,
         at,
     ).all()
+    unit_names_by_entity_id = {e.id: v.canonical_name for e, v in units}
     positions = []
     for pos_entity, version in position_rows:
         occupants = service.current_occupants(db, pos_entity.id, at)
-        positions.append({"entity": pos_entity, "version": version, "occupants": occupants})
+        unit_name = unit_names_by_entity_id.get(version.unit_entity_id) if version.unit_entity_id else None
+        positions.append({"entity": pos_entity, "version": version, "occupants": occupants, "unit_name": unit_name})
 
     pending_count = db.query(OrgEvent).filter(
         OrgEvent.organization_entity_id == entity_id, OrgEvent.review_status == "pending"

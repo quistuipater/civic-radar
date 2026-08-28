@@ -21,13 +21,14 @@
 <p class="empty">No version of this organization exists as of that date.</p>
 {% else %}
 
-<h2>Council / Leadership</h2>
+<h2>Positions</h2>
 {% if positions %}
 <table>
-  <tr><th>Position</th><th>Type</th><th>Occupant(s)</th><th>Status</th></tr>
+  <tr><th>Position</th><th>Unit</th><th>Type</th><th>Occupant(s)</th><th>Status</th></tr>
   {% for p in positions %}
   <tr>
     <td><a class="link" href="/entities/{{ p.entity.id }}">{{ p.version.title }}</a></td>
+    <td class="muted">{{ p.unit_name or '—' }}</td>
     <td class="muted">{{ p.version.position_type }}</td>
     <td>
       {% if p.occupants %}
