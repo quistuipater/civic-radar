@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app import dashboard
+from app import dashboard, record_provenance
 from app.config import settings
 from app.db import SessionLocal
 from app.log_handler import DbLogHandler
