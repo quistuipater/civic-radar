@@ -24,6 +24,13 @@ class Settings(BaseSettings):
 
     whisperx_base_url: str = "http://madhatter.local:8091"
 
+    # Cloud AI fallback (CLAUDE.md: "optional manual escalation path only,
+    # never a default dependency") -- see app/ai/ai_client.py. Unset by
+    # default; escalation is a no-op (falls through to Ollama's own error)
+    # unless an operator sets ANTHROPIC_API_KEY.
+    anthropic_api_key: str | None = None
+    claude_fallback_model: str = "claude-haiku-4-5-20251001"
+
     worker_tick_seconds: int = 60
     ai_job_concurrency: int = 1
     http_user_agent: str = "CivicRadar/0.1 (+local civic monitoring)"

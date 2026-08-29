@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.ai import ollama_client
+from app.ai import ai_client, ollama_client
 from app.ai.classify import load_document_text
 from app.config import settings
 from app.models import AiOutput, Document, Prompt
@@ -35,7 +35,7 @@ def summarize_document(db: Session, document: Document) -> AiOutput | None:
             jurisdiction=document.jurisdiction or "",
             text=text[:MAX_CHARS],
         )
-        output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
+        output_json, error = ai_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
     else:
         error = "ollama unavailable; no summary generated (Phase 0 has no non-AI summary fallback)"
 

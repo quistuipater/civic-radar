@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.ai import ollama_client
+from app.ai import ai_client, ollama_client
 from app.ai.heuristics import heuristic_classification
 from app.ai.prompts import TOPIC_TAXONOMY
 from app.config import settings
@@ -37,7 +37,7 @@ def classify_document(db: Session, document: Document) -> AiOutput:
             meeting_date=document.meeting_date or "",
             text=text[:MAX_CHARS],
         )
-        output_json, error = ollama_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
+        output_json, error = ai_client.generate_json(prompt_row.model_name, prompt, options=prompt_row.model_params)
 
     if output_json is None:
         output_json = heuristic_classification(document.title, text, document.meeting_date)

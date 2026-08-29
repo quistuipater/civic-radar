@@ -11,7 +11,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.ai import ollama_client
+from app.ai import ai_client, ollama_client
 from app.ai.classify import load_document_text
 from app.config import settings
 from app.models import AgendaItem, AiOutput, Document, Meeting, Prompt
@@ -54,7 +54,7 @@ def extract_agenda_items(db: Session, document: Document) -> None:
         meeting_date=document.meeting_date or "",
         text=text[:MAX_CHARS],
     )
-    output_json, error = ollama_client.generate_json(
+    output_json, error = ai_client.generate_json(
         prompt_row.model_name, prompt, timeout=180.0, options=prompt_row.model_params
     )
 
