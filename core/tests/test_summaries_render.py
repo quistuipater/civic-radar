@@ -47,6 +47,15 @@ class TestRenderSummaryEmail:
         assert "#eaeee7" in html_body  # light --paper value
         assert "#131a17" not in html_body  # dark --paper value must not appear
 
+    def test_html_body_has_no_unresolved_css_variables(self):
+        # CSS custom properties (var(--x)) render fine in a browser -- which
+        # is why the dashboard page looks right -- but email clients
+        # (Gmail especially) have poor/inconsistent support for them,
+        # silently dropping the styling. Every var(--x) use must be
+        # resolved to a literal value before the email is sent.
+        _, _, html_body = render_summary_email(_make_summary())
+        assert "var(--" not in html_body
+
     def test_plain_text_body_includes_narrative_and_stats(self):
         _, plain_text, _ = render_summary_email(_make_summary())
         assert "Nothing happened today" in plain_text

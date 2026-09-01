@@ -26,8 +26,8 @@
   .civic-report .issue-tag { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.75rem; color: var(--ink-soft); text-align: right; white-space: nowrap; }
   .civic-report .dek { font-size: 1rem; color: var(--ink-soft); margin: 0.4rem 0 0; max-width: 34em; line-height: 1.5; }
   .civic-report .rule-heavy { height: 3px; background: var(--ink); margin: 1.4rem 0 0; }
-  .civic-report .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); margin: 1.6rem 0; border: 1px solid var(--rule); }
-  .civic-report .stat { background: var(--paper-raised); padding: 0.85rem 0.5rem; text-align: center; }
+  .civic-report .stat-strip { width: 100%; border-collapse: separate; border-spacing: 1px; background: var(--rule); margin: 1.6rem 0; border: 1px solid var(--rule); }
+  .civic-report .stat { background: var(--paper-raised); padding: 0.85rem 0.5rem; text-align: center; width: 25%; border: none; }
   .civic-report .stat .n { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 600; color: var(--kelp); display: block; line-height: 1; }
   .civic-report .stat .l { font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); display: block; margin-top: 0.35rem; }
   .civic-report section.col { margin: 2rem 0; }
@@ -50,10 +50,13 @@
   .civic-report td.num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
   .civic-report .table-wrap { overflow-x: auto; }
   .civic-report .sev { display: inline-flex; align-items: center; gap: 0.35rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; font-weight: 600; }
-  .civic-report .sev::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); display: inline-block; }
-  .civic-report .sev.s1 { --dot: var(--sev-1); color: var(--sev-1); }
-  .civic-report .sev.s2 { --dot: var(--sev-2); color: var(--sev-2); }
-  .civic-report .sev.s3 { --dot: var(--sev-3); color: var(--sev-3); }
+  .civic-report .sev::before { content: ""; width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .civic-report .sev.s1 { color: var(--sev-1); }
+  .civic-report .sev.s2 { color: var(--sev-2); }
+  .civic-report .sev.s3 { color: var(--sev-3); }
+  .civic-report .sev.s1::before { background: var(--sev-1); }
+  .civic-report .sev.s2::before { background: var(--sev-2); }
+  .civic-report .sev.s3::before { background: var(--sev-3); }
   .civic-report .quiet-note { font-size: 0.86rem; color: var(--ink-soft); font-style: italic; padding: 0.5rem 0; }
   .civic-report .colophon { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-size: 0.76rem; color: var(--ink-soft); line-height: 1.6; }
   .civic-report .colophon strong { color: var(--ink); }
@@ -75,12 +78,14 @@
 
   <div class="rule-heavy"></div>
 
-  <div class="stat-strip">
-    <div class="stat"><span class="n">{{ stats.documents_filed }}</span><span class="l">Docs filed</span></div>
-    <div class="stat"><span class="n">{{ stats.meetings_held|length }}</span><span class="l">Meetings held</span></div>
-    <div class="stat"><span class="n">{{ stats.alerts_raised }}</span><span class="l">Alerts raised</span></div>
-    <div class="stat"><span class="n">{{ stats.review_queue_count }}</span><span class="l">Awaiting review</span></div>
-  </div>
+  <table class="stat-strip" cellpadding="0" cellspacing="0" role="presentation">
+    <tr>
+      <td class="stat"><span class="n">{{ stats.documents_filed }}</span><span class="l">Docs filed</span></td>
+      <td class="stat"><span class="n">{{ stats.meetings_held|length }}</span><span class="l">Meetings held</span></td>
+      <td class="stat"><span class="n">{{ stats.alerts_raised }}</span><span class="l">Alerts raised</span></td>
+      <td class="stat"><span class="n">{{ stats.review_queue_count }}</span><span class="l">Awaiting review</span></td>
+    </tr>
+  </table>
 
   <section class="col">
     <div class="section-head"><h2>Overview</h2></div>

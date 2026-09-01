@@ -5,6 +5,8 @@ one source of truth for the report layout instead of a second HTML-building
 implementation living here.
 """
 
+import re
+
 import jinja2
 from markupsafe import escape
 
@@ -12,6 +14,25 @@ from app.config import settings
 from app.models import NarrativeSummary
 
 _env = jinja2.Environment(loader=jinja2.FileSystemLoader("app/templates"), autoescape=True)
+
+_VAR_DECL_RE = re.compile(r"--([\w-]+)\s*:\s*([^;]+);")
+_VAR_USE_RE = re.compile(r"var\(--([\w-]+)\)")
+
+
+def _inline_css_variables(html: str) -> str:
+    """CSS custom properties (var(--x)) render fine in a browser -- which is
+    why the dashboard page looks right -- but email clients (Gmail
+    especially) have poor/inconsistent support for them, silently dropping
+    the styling and leaving the report unstyled. Since summary_report.html
+    is shared with the dashboard (where variables should stay, for real
+    theme switching), resolve them here instead of forking the template:
+    find every `--name: value;` declaration and replace every `var(--name)`
+    use with its literal value. Only one theme's declarations are ever
+    present in an email render (theme="light"), so there's no ambiguity
+    about which value wins.
+    """
+    declarations = dict(_VAR_DECL_RE.findall(html))
+    return _VAR_USE_RE.sub(lambda m: declarations.get(m.group(1), m.group(0)), html)
 
 
 def render_summary_email(summary: NarrativeSummary) -> tuple[str, str, str]:
@@ -27,6 +48,7 @@ def render_summary_email(summary: NarrativeSummary) -> tuple[str, str, str]:
         f"<title>{escape(subject)}</title></head>"
         f"<body style=\"margin:0;\">{report_fragment}</body></html>"
     )
+    html_body = _inline_css_variables(html_body)
 
     plain_text_body = _render_plain_text(summary, stats)
     return subject, plain_text_body, html_body
