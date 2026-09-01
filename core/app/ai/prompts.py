@@ -218,6 +218,33 @@ Respond with ONLY a JSON object matching this exact shape:
 If no organizational claims are found, respond with {{"assertions": []}}.
 """
 
+NARRATIVE_SUMMARY_PROMPT = """You are writing a {period_label} civic-activity recap for {project_name} \
+covering {jurisdiction}, for the period {period_start} to {period_end}. The reader is someone who wants a \
+plain-English overview of what happened -- new notices, upcoming hearings/votes, anything flagged for human \
+review, and approaching deadlines -- without reading every underlying document themselves.
+
+Base the recap ONLY on the structured rollup below -- it was already computed from this project's own \
+classified/archived documents, nothing here is new research. Do not invent, guess, or embellish beyond what's \
+listed; if a section is empty, say so plainly (e.g. "No new public notices this period") rather than inventing \
+filler. Distinguish clearly between something that already happened (a vote, a filing) and something merely \
+scheduled or upcoming. Keep a neutral, factual tone -- this is a civic-monitoring recap, not commentary or \
+advocacy.
+
+Structured rollup for this period:
+---
+{digest_markdown}
+---
+
+Respond with ONLY a JSON object matching this exact shape:
+{{
+  "title": "a short, specific headline for this period (e.g. 'Ventura: Quiet week, one hearing scheduled')",
+  "narrative_markdown": "the full recap in markdown, using ## section headers, a few short paragraphs and/or \
+bullet lists, plain language, linking nothing (the rollup's own links aren't meaningful outside the dashboard)"
+}}
+If literally nothing happened in this period (every rollup section is empty), still return valid JSON with a \
+narrative_markdown that says so plainly rather than omitting the field.
+"""
+
 PROMPT_DEFAULTS = [
     dict(
         prompt_key="agenda_item_classification",
@@ -322,6 +349,16 @@ PROMPT_DEFAULTS = [
                 }
             ]
         },
+        active=True,
+    ),
+    dict(
+        prompt_key="narrative_summary",
+        prompt_version="v1",
+        task_type="narrative_summary",
+        prompt_text=NARRATIVE_SUMMARY_PROMPT,
+        model_name=None,
+        model_params={"temperature": 0.2},
+        json_schema={"title": "str", "narrative_markdown": "str"},
         active=True,
     ),
 ]

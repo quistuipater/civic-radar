@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Summaries — {{ project_name }}{% endblock %}
+{% block content %}
+<h1>Daily &amp; Weekly Summaries</h1>
+<p class="muted">
+  <a class="link" href="/summaries">all</a>
+  · <a class="link" href="/summaries?period_type=daily">daily</a>
+  · <a class="link" href="/summaries?period_type=weekly">weekly</a>
+</p>
+
+{% if summaries %}
+<table>
+  <tr><th>Period</th><th>Title</th><th>Covers</th><th>Emailed</th></tr>
+  {% for s in summaries %}
+  <tr>
+    <td class="muted">{{ s.period_type }}</td>
+    <td><a class="link" href="/summaries/{{ s.id }}">{{ s.title }}</a></td>
+    <td class="muted">{{ s.period_start.date() }} – {{ s.period_end.date() }}</td>
+    <td>
+      {% if s.emailed_at %}<span class="badge level-1">sent</span>
+      {% elif s.email_error %}<span class="badge level-3" title="{{ s.email_error }}">not sent</span>
+      {% else %}<span class="muted">—</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="empty">No summaries generated yet.</p>
+{% endif %}
+{% endblock %}

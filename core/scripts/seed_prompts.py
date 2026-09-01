@@ -11,6 +11,7 @@ MODEL_BY_TASK_TYPE = {
     "agenda_item_extraction": settings.ollama_triage_model,
     "meeting_results_summary": settings.ollama_analysis_model,
     "org_assertion_extraction": settings.ollama_triage_model,
+    "narrative_summary": settings.ollama_analysis_model,
 }
 
 

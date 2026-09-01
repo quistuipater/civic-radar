@@ -15,7 +15,7 @@ import pytest
 
 import app.worker as worker_module
 from app.archive import now_utc
-from app.models import Document
+from app.models import Document, NarrativeSummary
 
 from .conftest import make_ai_output, make_document, make_news_source, make_source
 
@@ -530,3 +530,59 @@ class TestTickPrunesAppLogs:
         worker_module.tick()
 
         assert calls == [1]
+
+
+class TestRunSummaryBatch:
+    def test_generates_both_daily_and_weekly_when_neither_exists(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+
+        worker_module.run_summary_batch()
+
+        from app.models import NarrativeSummary
+
+        period_types = {row.period_type for row in db.query(NarrativeSummary).all()}
+        assert period_types == {"daily", "weekly"}
+
+    def test_skips_a_period_that_already_has_a_recent_summary(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "period_already_exists", lambda db, period_type: period_type == "daily")
+        generated = []
+        monkeypatch.setattr(
+            worker_module,
+            "generate_summary",
+            lambda db, period_type: generated.append(period_type) or db.query(NarrativeSummary).first(),
+        )
+
+        worker_module.run_summary_batch()
+
+        assert generated == ["weekly"]
+
+    def test_a_crashing_period_does_not_prevent_the_other_from_running(self, db, db_session_factory, monkeypatch, caplog):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "period_already_exists", lambda db, period_type: False)
+
+        def fake_generate(db, period_type):
+            if period_type == "daily":
+                raise RuntimeError("boom")
+            return db.query(NarrativeSummary).first()
+
+        monkeypatch.setattr(worker_module, "generate_summary", fake_generate)
+        monkeypatch.setattr(worker_module, "render_summary_email", lambda summary: ("subject", "body", "<p>body</p>"))
+        monkeypatch.setattr(worker_module, "send_summary_email", lambda *a, **k: None)
+
+        with caplog.at_level(logging.ERROR):
+            worker_module.run_summary_batch()  # must not raise
+
+        assert any("daily narrative summary generation crashed" in r.getMessage() for r in caplog.records)
+
+    def test_records_email_error_without_raising_when_smtp_is_not_configured(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+
+        worker_module.run_summary_batch()
+
+        from app.models import NarrativeSummary
+
+        rows = db.query(NarrativeSummary).all()
+        assert len(rows) == 2
+        assert all(row.emailed_at is None for row in rows)
+        assert all(row.email_error for row in rows)

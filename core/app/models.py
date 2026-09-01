@@ -627,3 +627,30 @@ class NewsArticle(Base):
     classification_confidence: Mapped[str] = mapped_column(Text, nullable=False)  # "low" | "medium" | "high"
 
     news_source: Mapped["NewsSource"] = relationship(back_populates="articles")
+
+
+class NarrativeSummary(Base):
+    """An AI-written daily/weekly recap of this jurisdiction's civic activity
+    -- built from the same rollup export.digest.py already computes for the
+    in-app Daily Digest (no separate data-gathering layer), then narrated by
+    the AI layer and optionally emailed. See app/summaries/ for the
+    generation, email, and dashboard code; this table is just the record of
+    what was generated and when, so the dashboard can list past issues and
+    the worker can tell whether today's/this week's is already done.
+    """
+
+    __tablename__ = "narrative_summaries"
+    __table_args__ = (UniqueConstraint("period_type", "period_start", name="uq_narrative_summary_period"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    period_type: Mapped[str] = mapped_column(Text, nullable=False)  # "daily" | "weekly"
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    narrative_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    model_name: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

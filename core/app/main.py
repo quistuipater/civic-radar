@@ -25,6 +25,7 @@ from app.routers import (
     search,
     sources,
 )
+from app.summaries import dashboard as summaries_dashboard
 
 app = FastAPI(title=settings.project_name, version="0.1.0")
 
@@ -44,6 +45,7 @@ app.include_router(logs.router)
 app.include_router(news.router)
 app.include_router(organization_tracker.router)
 app.include_router(organization_tracker_dashboard.router)
+app.include_router(summaries_dashboard.router)
 app.include_router(dashboard.router)
 
 app.mount("/archive", StaticFiles(directory=settings.archive_root), name="archive")

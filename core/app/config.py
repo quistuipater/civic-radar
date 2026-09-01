@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     claude_fallback_model: str = "claude-haiku-4-5-20251001"
 
+    # Daily/weekly narrative summary emailing (app/summaries/). Unset by
+    # default -- summaries still generate and file in-dashboard either way,
+    # emailing is skipped (logged, not a crash) until an operator sets these.
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    summary_recipient_email: str | None = None
+
     worker_tick_seconds: int = 60
     ai_job_concurrency: int = 1
     http_user_agent: str = "CivicRadar/0.1 (+local civic monitoring)"

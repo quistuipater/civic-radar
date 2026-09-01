@@ -26,8 +26,11 @@ from app.issue_matching import match_document_to_issue
 from app.log_handler import DbLogHandler, prune_app_logs
 from app.models import AiOutput, Document, NewsSource, Source
 from app.news.retrieval import poll_news_source
+from app.notifications.email_client import send_summary_email
 from app.organization_tracker import pipeline as organization_tracker_pipeline
 from app.parsing.service import parse_document
+from app.summaries.generate import generate_summary, period_already_exists
+from app.summaries.render import render_summary_email
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -187,12 +190,40 @@ def run_organization_tracker_batch() -> None:
         db.close()
 
 
+def run_summary_batch() -> None:
+    """Checked every tick (cheap: one query per period type), but only
+    actually generates when the most recent summary for that period type
+    is more than a day/week old -- see summaries.generate.period_already_exists.
+    Email is best-effort: a send failure is recorded on the row
+    (NarrativeSummary.email_error) and logged, never raised -- the summary
+    is still filed in the dashboard regardless of whether the email went out.
+    """
+    db = SessionLocal()
+    try:
+        for period_type in ("daily", "weekly"):
+            try:
+                if period_already_exists(db, period_type):
+                    continue
+                summary = generate_summary(db, period_type)
+                subject, markdown_body, html_body = render_summary_email(summary)
+                email_error = send_summary_email(subject, markdown_body, html_body)
+                summary.email_error = email_error
+                summary.emailed_at = None if email_error else datetime.now(timezone.utc)
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception("%s narrative summary generation crashed", period_type)
+    finally:
+        db.close()
+
+
 def tick() -> None:
     run_ingestion_tick()
     run_parsing_batch()
     run_ai_batch()
     run_news_batch()
     run_organization_tracker_batch()
+    run_summary_batch()
     maybe_prune_app_logs()
 
 
