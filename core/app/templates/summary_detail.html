@@ -5,16 +5,6 @@
 {% if not summary %}
 <p class="empty">Summary not found.</p>
 {% else %}
-<h1>{{ summary.title }}</h1>
-<p class="muted">
-  {{ summary.period_type }} recap — {{ summary.period_start.date() }} to {{ summary.period_end.date() }}
-  · generated {{ summary.created_at.date() }} by {{ summary.model_name }}
-  {% if summary.emailed_at %} · emailed {{ summary.emailed_at.date() }}
-  {% elif summary.email_error %} · <span title="{{ summary.email_error }}">not emailed</span>{% endif %}
-</p>
-{% if summary.error_message %}
-<p class="badge level-3">Note: narrative generation had an issue ({{ summary.error_message }}) — showing the raw rollup below.</p>
-{% endif %}
-<pre style="white-space: pre-wrap; font-family: inherit;">{{ summary.narrative_markdown }}</pre>
+{% include "summary_report.html" with context %}
 {% endif %}
 {% endblock %}

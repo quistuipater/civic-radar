@@ -9,9 +9,20 @@ def _make_summary(db, **overrides):
         period_start=datetime(2026, 8, 31, tzinfo=timezone.utc),
         period_end=datetime(2026, 9, 1, tzinfo=timezone.utc),
         title="Ventura: quiet day",
-        narrative_markdown="Nothing happened.",
+        narrative_markdown="Nothing happened today.",
+        stats_json={
+            "documents_filed": 0,
+            "meetings_held": [],
+            "meetings_upcoming": [],
+            "alerts_raised": 0,
+            "alerts_by_level": {},
+            "review_queue_count": 0,
+            "filing_by_agency": [],
+            "new_notices": [],
+            "issue_number": 1,
+        },
         model_name="qwen3:8b",
-        prompt_version="v1",
+        prompt_version="v2",
     )
     defaults.update(overrides)
     summary = NarrativeSummary(**defaults)
@@ -46,13 +57,29 @@ class TestSummariesListPage:
 
 
 class TestSummaryDetailPage:
-    def test_renders_the_narrative(self, db, client):
-        summary = _make_summary(db, narrative_markdown="## Section\n\nSome real content here.")
+    def test_renders_the_narrative_and_stats(self, db, client):
+        summary = _make_summary(
+            db,
+            narrative_markdown="Some real content here.",
+            stats_json={
+                "documents_filed": 7,
+                "meetings_held": [{"date": "2026-08-31", "body": "City Council", "meeting_type": None}],
+                "meetings_upcoming": [],
+                "alerts_raised": 2,
+                "alerts_by_level": {"3": 2},
+                "review_queue_count": 1,
+                "filing_by_agency": [],
+                "new_notices": [],
+                "issue_number": 3,
+            },
+        )
         db.commit()
 
         resp = client.get(f"/summaries/{summary.id}")
         assert resp.status_code == 200
         assert "Some real content here" in resp.text
+        assert ">7<" in resp.text
+        assert "City Council" in resp.text
 
     def test_shows_error_note_when_generation_had_an_issue(self, db, client):
         summary = _make_summary(db, error_message="model returned invalid JSON")

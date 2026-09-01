@@ -533,19 +533,40 @@ class TestTickPrunesAppLogs:
 
 
 class TestRunSummaryBatch:
-    def test_generates_both_daily_and_weekly_when_neither_exists(self, db, db_session_factory, monkeypatch):
+    def test_generates_both_daily_and_weekly_when_due_and_neither_exists(self, db, db_session_factory, monkeypatch):
+        # send_summary_email is force-mocked in every test in this class --
+        # this container may carry real SMTP credentials (production), and
+        # a test run must never actually send mail regardless of ambient
+        # environment config.
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "is_due", lambda period_type: True)
+        monkeypatch.setattr(worker_module, "send_summary_email", lambda *a, **k: None)
 
         worker_module.run_summary_batch()
-
-        from app.models import NarrativeSummary
 
         period_types = {row.period_type for row in db.query(NarrativeSummary).all()}
         assert period_types == {"daily", "weekly"}
 
+    def test_skips_a_period_that_is_not_due_yet(self, db, db_session_factory, monkeypatch):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "is_due", lambda period_type: period_type == "daily")
+        monkeypatch.setattr(worker_module, "send_summary_email", lambda *a, **k: None)
+        generated = []
+        monkeypatch.setattr(
+            worker_module,
+            "generate_summary",
+            lambda db, period_type: generated.append(period_type) or db.query(NarrativeSummary).first(),
+        )
+
+        worker_module.run_summary_batch()
+
+        assert generated == ["daily"]
+
     def test_skips_a_period_that_already_has_a_recent_summary(self, db, db_session_factory, monkeypatch):
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "is_due", lambda period_type: True)
         monkeypatch.setattr(worker_module, "period_already_exists", lambda db, period_type: period_type == "daily")
+        monkeypatch.setattr(worker_module, "send_summary_email", lambda *a, **k: None)
         generated = []
         monkeypatch.setattr(
             worker_module,
@@ -559,6 +580,7 @@ class TestRunSummaryBatch:
 
     def test_a_crashing_period_does_not_prevent_the_other_from_running(self, db, db_session_factory, monkeypatch, caplog):
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "is_due", lambda period_type: True)
         monkeypatch.setattr(worker_module, "period_already_exists", lambda db, period_type: False)
 
         def fake_generate(db, period_type):
@@ -576,11 +598,14 @@ class TestRunSummaryBatch:
         assert any("daily narrative summary generation crashed" in r.getMessage() for r in caplog.records)
 
     def test_records_email_error_without_raising_when_smtp_is_not_configured(self, db, db_session_factory, monkeypatch):
+        # Force-unconfigured regardless of ambient environment -- this
+        # container may have real SMTP credentials set (production), and
+        # this test must never actually send mail.
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        monkeypatch.setattr(worker_module, "is_due", lambda period_type: True)
+        monkeypatch.setattr(worker_module, "send_summary_email", lambda *a, **k: "SMTP not configured")
 
         worker_module.run_summary_batch()
-
-        from app.models import NarrativeSummary
 
         rows = db.query(NarrativeSummary).all()
         assert len(rows) == 2

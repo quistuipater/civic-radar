@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.models import NarrativeSummary
 
 router = APIRouter(tags=["summaries-dashboard"])
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["project_name"] = settings.project_name
 
 SUMMARIES_PAGE_SIZE = 30
 
@@ -34,4 +36,7 @@ def summaries_list_page(request: Request, period_type: str = "", db: Session = D
 @router.get("/summaries/{summary_id}")
 def summary_detail_page(summary_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     summary = db.get(NarrativeSummary, summary_id)
-    return templates.TemplateResponse("summary_detail.html", {"request": request, "summary": summary})
+    stats = summary.stats_json if summary else None
+    return templates.TemplateResponse(
+        "summary_detail.html", {"request": request, "summary": summary, "stats": stats, "theme": "dark"}
+    )

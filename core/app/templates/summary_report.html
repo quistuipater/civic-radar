@@ -1,0 +1,160 @@
+{% if theme == "dark" %}
+<style>
+  .civic-report {
+    --paper: #131a17; --paper-raised: #1b2320; --ink: #e6ebe3; --ink-soft: #9dab9e;
+    --rule: #37413b; --rule-strong: #4f5b52; --kelp: #7cb5a3; --kelp-soft: #5c9683;
+    --redwood: #d68f70; --sand: #d3ac6a; --sev-1: #8fa985; --sev-2: #d3ac6a; --sev-3: #d68f70;
+  }
+</style>
+{% else %}
+<style>
+  .civic-report {
+    --paper: #eaeee7; --paper-raised: #f5f7f1; --ink: #172522; --ink-soft: #52625b;
+    --rule: #c4cabb; --rule-strong: #97a189; --kelp: #2c6b5c; --kelp-soft: #4d8a79;
+    --redwood: #a8583a; --sand: #ab8a3f; --sev-1: #7c8f74; --sev-2: #ab8a3f; --sev-3: #a8583a;
+  }
+</style>
+{% endif %}
+<style>
+  .civic-report { background: var(--paper); color: var(--ink); font-family: Charter, "Iowan Old Style", Georgia, serif; padding: 2rem 1.25rem 3rem; }
+  .civic-report * { box-sizing: border-box; }
+  .civic-report .sheet { max-width: 640px; margin: 0 auto; }
+  .civic-report .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); display: flex; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 0.6rem; }
+  .civic-report .masthead { margin: 1.1rem 0 0.3rem; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .civic-report .masthead h1 { font-family: "Iowan Old Style", Charter, Georgia, serif; font-weight: 700; font-size: 2rem; line-height: 1.05; letter-spacing: -0.01em; margin: 0; }
+  .civic-report .masthead h1 em { font-style: normal; color: var(--kelp); }
+  .civic-report .issue-tag { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.75rem; color: var(--ink-soft); text-align: right; white-space: nowrap; }
+  .civic-report .dek { font-size: 1rem; color: var(--ink-soft); margin: 0.4rem 0 0; max-width: 34em; line-height: 1.5; }
+  .civic-report .rule-heavy { height: 3px; background: var(--ink); margin: 1.4rem 0 0; }
+  .civic-report .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); margin: 1.6rem 0; border: 1px solid var(--rule); }
+  .civic-report .stat { background: var(--paper-raised); padding: 0.85rem 0.5rem; text-align: center; }
+  .civic-report .stat .n { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 600; color: var(--kelp); display: block; line-height: 1; }
+  .civic-report .stat .l { font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); display: block; margin-top: 0.35rem; }
+  .civic-report section.col { margin: 2rem 0; }
+  .civic-report .section-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.9rem; }
+  .civic-report .section-head h2 { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--ink); margin: 0; white-space: nowrap; }
+  .civic-report .section-head::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+  .civic-report .overview-box { background: var(--paper-raised); border: 1px solid var(--rule); border-left: 3px solid var(--kelp); padding: 1.1rem 1.3rem; }
+  .civic-report .overview-box p { margin: 0 0 0.85rem; font-size: 1rem; line-height: 1.62; }
+  .civic-report .overview-box p:last-child { margin-bottom: 0; }
+  .civic-report .item { display: flex; gap: 0.9rem; padding: 0.7rem 0; border-top: 1px solid var(--rule); }
+  .civic-report .item:first-of-type { border-top: none; padding-top: 0; }
+  .civic-report .item .date { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; color: var(--ink-soft); white-space: nowrap; padding-top: 0.2rem; min-width: 3.6rem; }
+  .civic-report .item .body-text { flex: 1; }
+  .civic-report .item .title { font-size: 0.95rem; line-height: 1.4; font-weight: 600; }
+  .civic-report .item .title a { color: inherit; text-decoration: none; }
+  .civic-report .item .meta { font-size: 0.82rem; color: var(--ink-soft); margin-top: 0.15rem; }
+  .civic-report table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .civic-report th { text-align: left; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; padding: 0 0.5rem 0.5rem 0; border-bottom: 1px solid var(--rule-strong); }
+  .civic-report td { padding: 0.5rem 0.5rem 0.5rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .civic-report td.num { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .civic-report .table-wrap { overflow-x: auto; }
+  .civic-report .sev { display: inline-flex; align-items: center; gap: 0.35rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; font-weight: 600; }
+  .civic-report .sev::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); display: inline-block; }
+  .civic-report .sev.s1 { --dot: var(--sev-1); color: var(--sev-1); }
+  .civic-report .sev.s2 { --dot: var(--sev-2); color: var(--sev-2); }
+  .civic-report .sev.s3 { --dot: var(--sev-3); color: var(--sev-3); }
+  .civic-report .quiet-note { font-size: 0.86rem; color: var(--ink-soft); font-style: italic; padding: 0.5rem 0; }
+  .civic-report .colophon { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-size: 0.76rem; color: var(--ink-soft); line-height: 1.6; }
+  .civic-report .colophon strong { color: var(--ink); }
+  .civic-report a { color: var(--kelp); }
+</style>
+<div class="civic-report">
+<div class="sheet">
+
+  <div class="eyebrow">
+    <span>Civic Radar — {{ project_name }}</span>
+    <span>Vol. 1, No. {{ stats.issue_number }}</span>
+  </div>
+
+  <div class="masthead">
+    <h1>{{ "The Daily" if summary.period_type == "daily" else "The Weekly" }} <em>{{ "Brief" if summary.period_type == "daily" else "Record" }}</em></h1>
+    <div class="issue-tag">{{ summary.period_start.date() }} – {{ summary.period_end.date() }}<br>Compiled {{ summary.created_at.strftime("%b %-d, %H:%M UTC") }}</div>
+  </div>
+  <p class="dek">A ledger of what {{ project_name }} tracked sources filed, met on, and scheduled this {{ "day" if summary.period_type == "daily" else "week" }} — assembled from municipal sources, unedited by hand.</p>
+
+  <div class="rule-heavy"></div>
+
+  <div class="stat-strip">
+    <div class="stat"><span class="n">{{ stats.documents_filed }}</span><span class="l">Docs filed</span></div>
+    <div class="stat"><span class="n">{{ stats.meetings_held|length }}</span><span class="l">Meetings held</span></div>
+    <div class="stat"><span class="n">{{ stats.alerts_raised }}</span><span class="l">Alerts raised</span></div>
+    <div class="stat"><span class="n">{{ stats.review_queue_count }}</span><span class="l">Awaiting review</span></div>
+  </div>
+
+  <section class="col">
+    <div class="section-head"><h2>Overview</h2></div>
+    <div class="overview-box">
+      {% for para in summary.narrative_markdown.split('\n\n') if para.strip() %}
+      <p>{{ para }}</p>
+      {% endfor %}
+    </div>
+    {% if summary.error_message %}<p class="quiet-note">Note: overview narration had an issue ({{ summary.error_message }}); stats above are still real.</p>{% endif %}
+  </section>
+
+  <section class="col">
+    <div class="section-head"><h2>Meetings Held</h2></div>
+    {% if stats.meetings_held %}
+    {% for m in stats.meetings_held %}
+    <div class="item"><div class="date">{{ m.date }}</div><div class="body-text"><div class="title">{{ m.body }}</div>{% if m.meeting_type %}<div class="meta">{{ m.meeting_type }}</div>{% endif %}</div></div>
+    {% endfor %}
+    {% else %}<p class="quiet-note">No meetings held this period.</p>{% endif %}
+  </section>
+
+  <section class="col">
+    <div class="section-head"><h2>On the Docket — Next 14 Days</h2></div>
+    {% if stats.meetings_upcoming %}
+    {% for m in stats.meetings_upcoming %}
+    <div class="item"><div class="date">{{ m.date }}</div><div class="body-text"><div class="title">{{ m.body }}</div>{% if m.meeting_type %}<div class="meta">{{ m.meeting_type }}</div>{% endif %}</div></div>
+    {% endfor %}
+    {% else %}<p class="quiet-note">Nothing scheduled in the next 14 days.</p>{% endif %}
+  </section>
+
+  <section class="col">
+    <div class="section-head"><h2>New Public Notices</h2></div>
+    {% if stats.new_notices %}
+    {% for n in stats.new_notices %}
+    <div class="item"><div class="date">Filing</div><div class="body-text"><div class="title"><a href="{{ n.url }}">{{ n.title }}</a></div></div></div>
+    {% endfor %}
+    {% else %}<p class="quiet-note">No new public notices this period.</p>{% endif %}
+  </section>
+
+  {% if stats.filing_by_agency %}
+  <section class="col">
+    <div class="section-head"><h2>Filing Volume by Source</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Office</th><th class="num">Documents</th></tr></thead>
+        <tbody>
+          {% for row in stats.filing_by_agency %}
+          <tr><td>{{ row.agency }}</td><td class="num">{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="col">
+    <div class="section-head"><h2>Alert Log</h2></div>
+    {% if stats.alerts_by_level %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Severity</th><th class="num">Count</th></tr></thead>
+        <tbody>
+          {% for level, count in stats.alerts_by_level.items() %}
+          <tr><td><span class="sev s{{ 3 if level|int >= 3 else (2 if level|int == 2 else 1) }}">Level {{ level }}</span></td><td class="num">{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="quiet-note">No alerts raised this period.</p>{% endif %}
+    <p class="quiet-note">Review queue holds {{ stats.review_queue_count }} item{{ "s" if stats.review_queue_count != 1 else "" }}.</p>
+  </section>
+
+  <div class="colophon">
+    <strong>{{ project_name }}</strong> — internal draft, compiled from existing AI classifications and summaries; only the Overview paragraphs above are model-written, every count and table is a direct query result. Source facts and AI-inferred claims are distinguished on each linked item's own record. Not for public distribution — human review required before external use.
+  </div>
+
+</div>
+</div>

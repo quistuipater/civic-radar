@@ -218,31 +218,31 @@ Respond with ONLY a JSON object matching this exact shape:
 If no organizational claims are found, respond with {{"assertions": []}}.
 """
 
-NARRATIVE_SUMMARY_PROMPT = """You are writing a {period_label} civic-activity recap for {project_name} \
-covering {jurisdiction}, for the period {period_start} to {period_end}. The reader is someone who wants a \
-plain-English overview of what happened -- new notices, upcoming hearings/votes, anything flagged for human \
-review, and approaching deadlines -- without reading every underlying document themselves.
+NARRATIVE_SUMMARY_PROMPT = """You are writing the "Overview" section of a {period_label} civic-activity report \
+for {project_name} covering {jurisdiction}, for the period {period_start} to {period_end}. Every other section \
+of this report (stat counts, meeting lists, filing tables, alert log) is rendered separately from real query \
+results -- your ONLY job is 2-3 short narrative paragraphs that give a reader the gist without reading every \
+underlying document, using the real numbers below as your only facts.
 
-Base the recap ONLY on the structured rollup below -- it was already computed from this project's own \
-classified/archived documents, nothing here is new research. Do not invent, guess, or embellish beyond what's \
-listed; if a section is empty, say so plainly (e.g. "No new public notices this period") rather than inventing \
-filler. Distinguish clearly between something that already happened (a vote, a filing) and something merely \
-scheduled or upcoming. Keep a neutral, factual tone -- this is a civic-monitoring recap, not commentary or \
-advocacy.
+These numbers are already correct and final -- restate them accurately, never recompute, round loosely, or \
+invent additional ones. If a count is 0, say so plainly (e.g. "No new public notices this period") rather than \
+omitting it or inventing activity. Distinguish clearly between something that already happened (a vote, a \
+filing, a meeting held) and something merely scheduled or upcoming. Keep a neutral, factual, slightly formal \
+tone -- this is a civic-monitoring report, not commentary or advocacy. Do not use markdown headers -- write \
+plain paragraphs only (the surrounding report already has its own headers).
 
-Structured rollup for this period:
+Real stats for this period:
 ---
-{digest_markdown}
+{stats_summary}
 ---
 
-Respond with ONLY a JSON object matching this exact shape:
+Respond with ONLY a JSON object with EXACTLY these two keys, spelled exactly as shown -- "narrative_markdown" \
+is the full field name, not "narrative" or any shortened/renamed version of it:
 {{
   "title": "a short, specific headline for this period (e.g. 'Ventura: Quiet week, one hearing scheduled')",
-  "narrative_markdown": "the full recap in markdown, using ## section headers, a few short paragraphs and/or \
-bullet lists, plain language, linking nothing (the rollup's own links aren't meaningful outside the dashboard)"
+  "narrative_markdown": "2-3 plain paragraphs (no markdown headers), each a normal paragraph of prose, using \
+the real numbers above naturally in the text"
 }}
-If literally nothing happened in this period (every rollup section is empty), still return valid JSON with a \
-narrative_markdown that says so plainly rather than omitting the field.
 """
 
 PROMPT_DEFAULTS = [
@@ -353,11 +353,17 @@ PROMPT_DEFAULTS = [
     ),
     dict(
         prompt_key="narrative_summary",
-        prompt_version="v1",
+        prompt_version="v4",
         task_type="narrative_summary",
         prompt_text=NARRATIVE_SUMMARY_PROMPT,
         model_name=None,
-        model_params={"temperature": 0.2},
+        # num_predict: Ollama's default output-token cap is too small for a
+        # multi-paragraph narrative and was silently truncating the response
+        # mid-string -- confirmed live 2026-09-01 (json.JSONDecodeError at a
+        # suspiciously consistent line/column across different content was
+        # the tell: every failure was a response cut off before its closing
+        # quote/brace, not genuinely malformed JSON).
+        model_params={"temperature": 0.2, "num_predict": 800},
         json_schema={"title": "str", "narrative_markdown": "str"},
         active=True,
     ),

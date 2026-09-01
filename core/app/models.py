@@ -648,6 +648,12 @@ class NarrativeSummary(Base):
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     narrative_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    # Deterministic counts/tables (documents filed, meetings held/upcoming,
+    # alerts by level, filing volume by agency) computed by
+    # summaries/stats.py -- kept separate from narrative_markdown (the AI-
+    # written overview paragraphs only) so numbers displayed are never at
+    # the mercy of the model getting arithmetic right. See summaries/render.py.
+    stats_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)

@@ -29,7 +29,7 @@ from app.news.retrieval import poll_news_source
 from app.notifications.email_client import send_summary_email
 from app.organization_tracker import pipeline as organization_tracker_pipeline
 from app.parsing.service import parse_document
-from app.summaries.generate import generate_summary, period_already_exists
+from app.summaries.generate import generate_summary, is_due, period_already_exists
 from app.summaries.render import render_summary_email
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -202,7 +202,7 @@ def run_summary_batch() -> None:
     try:
         for period_type in ("daily", "weekly"):
             try:
-                if period_already_exists(db, period_type):
+                if not is_due(period_type) or period_already_exists(db, period_type):
                     continue
                 summary = generate_summary(db, period_type)
                 subject, markdown_body, html_body = render_summary_email(summary)
