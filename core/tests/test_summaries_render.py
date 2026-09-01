@@ -56,6 +56,17 @@ class TestRenderSummaryEmail:
         _, _, html_body = render_summary_email(_make_summary())
         assert "var(--" not in html_body
 
+    def test_html_body_inlines_styles_as_attributes(self):
+        # <style> block support (regardless of placement or whether
+        # variables are resolved) is itself unreliable across email
+        # clients -- confirmed live 2026-09-01 against real Gmail
+        # rendering. Every element's computed style must be present as an
+        # inline style="" attribute, which every mainstream client honors.
+        _, _, html_body = render_summary_email(_make_summary())
+        assert 'class="masthead"' in html_body
+        assert 'style="margin:1.1rem 0 0.3rem' in html_body
+        assert "background:#eaeee7" in html_body  # light --paper, inlined on .civic-report
+
     def test_plain_text_body_includes_narrative_and_stats(self):
         _, plain_text, _ = render_summary_email(_make_summary())
         assert "Nothing happened today" in plain_text

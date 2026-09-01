@@ -9,6 +9,7 @@ import re
 
 import jinja2
 from markupsafe import escape
+from premailer import Premailer
 
 from app.config import settings
 from app.models import NarrativeSummary
@@ -51,6 +52,16 @@ def render_summary_email(summary: NarrativeSummary) -> tuple[str, str, str]:
         f"<body style=\"margin:0;\">{report_fragment}</body></html>"
     )
     html_body = _inline_css_variables(html_body)
+    # Belt and suspenders beyond just resolving CSS variables: <style>
+    # block support is itself unreliable across email clients regardless of
+    # placement (confirmed live 2026-09-01 -- moving <style> into <head>
+    # alone did not fix Gmail rendering). premailer converts every class-
+    # based rule into an inline style="" attribute on the actual element,
+    # which every mainstream email client honors -- the only genuinely
+    # reliable approach for HTML email, not a workaround for one client.
+    html_body = Premailer(
+        html_body, remove_classes=False, keep_style_tags=False, cssutils_logging_level="CRITICAL"
+    ).transform()
 
     plain_text_body = _render_plain_text(summary, stats)
     return subject, plain_text_body, html_body
