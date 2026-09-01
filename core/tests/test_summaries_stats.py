@@ -65,6 +65,63 @@ class TestComputeStats:
         titles = [n["title"] for n in stats["new_notices"]]
         assert titles == ["A Notice"]
 
+    def test_new_notices_link_to_the_real_source_when_present(self, db):
+        make_document(
+            db,
+            document_type="notice",
+            title="A Notice",
+            agency="Elections",
+            original_url="https://netfile.com/real-filing",
+            created_at=NOW - timedelta(hours=1),
+        )
+
+        stats = compute_stats(db, PERIOD_START, NOW)
+
+        assert stats["new_notices"][0]["url"] == "https://netfile.com/real-filing"
+        assert stats["new_notices"][0]["meta"] == "Elections"
+
+    def test_new_notices_fall_back_to_an_absolute_dashboard_url_when_no_source_url(self, db, monkeypatch):
+        import app.summaries.stats as stats_module
+
+        monkeypatch.setattr(stats_module.settings, "dashboard_base_url", "http://madhatter.local:8010")
+        document = make_document(
+            db, document_type="notice", title="A Notice", original_url=None, created_at=NOW - timedelta(hours=1)
+        )
+
+        stats = compute_stats(db, PERIOD_START, NOW)
+
+        assert stats["new_notices"][0]["url"] == f"http://madhatter.local:8010/documents/{document.id}"
+
+    def test_meeting_links_to_its_agenda_document_when_present(self, db):
+        agenda_doc = make_document(db, title="Agenda PDF", original_url="https://example.gov/agenda.pdf")
+        make_meeting(db, start_time=NOW - timedelta(hours=1), body="Held Meeting", agenda_document_id=agenda_doc.id)
+
+        stats = compute_stats(db, PERIOD_START, NOW)
+
+        assert stats["meetings_held"][0]["url"] == "https://example.gov/agenda.pdf"
+
+    def test_meeting_prefers_agenda_over_packet_over_minutes(self, db):
+        agenda_doc = make_document(db, title="Agenda", original_url="https://example.gov/agenda")
+        packet_doc = make_document(db, title="Packet", original_url="https://example.gov/packet")
+        make_meeting(
+            db,
+            start_time=NOW - timedelta(hours=1),
+            body="Held Meeting",
+            agenda_document_id=agenda_doc.id,
+            packet_document_id=packet_doc.id,
+        )
+
+        stats = compute_stats(db, PERIOD_START, NOW)
+
+        assert stats["meetings_held"][0]["url"] == "https://example.gov/agenda"
+
+    def test_meeting_url_is_none_when_no_document_is_linked(self, db):
+        make_meeting(db, start_time=NOW - timedelta(hours=1), body="Held Meeting")
+
+        stats = compute_stats(db, PERIOD_START, NOW)
+
+        assert stats["meetings_held"][0]["url"] is None
+
     def test_empty_period_returns_zeroed_stats_not_a_crash(self, db):
         stats = compute_stats(db, PERIOD_START, NOW)
 

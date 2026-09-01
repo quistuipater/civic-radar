@@ -47,5 +47,12 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    # LAN-reachable base URL for this city's dashboard, used to build real
+    # clickable links in emailed summaries (a relative /documents/{id} link
+    # is meaningless outside the browser context it was rendered in -- an
+    # email has no origin to resolve it against). Each city overrides this
+    # via docker-compose.yml to its own published port.
+    dashboard_base_url: str = "http://madhatter.local:8010"
+
 
 settings = Settings()

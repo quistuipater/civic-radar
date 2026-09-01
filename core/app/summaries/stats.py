@@ -11,9 +11,19 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import AiOutput, Alert, Document, Meeting, NarrativeSummary
 
 UPCOMING_WINDOW_DAYS = 14
+
+
+def _document_url(document: Document) -> str:
+    # original_url (the real source, e.g. the agency's own site/NetFile) is
+    # always preferred when present; the /documents/{id} fallback is only
+    # for documents ingested by a route that never captured a source URL,
+    # and must be absolute -- an emailed summary has no browser origin to
+    # resolve a relative link against.
+    return document.original_url or f"{settings.dashboard_base_url}/documents/{document.id}"
 
 
 def compute_stats(db: Session, period_start: datetime, period_end: datetime) -> dict:
@@ -34,6 +44,16 @@ def compute_stats(db: Session, period_start: datetime, period_end: datetime) -> 
         .filter(Meeting.start_time.between(period_end, upcoming_until))
         .order_by(Meeting.start_time)
         .all()
+    )
+
+    meeting_doc_ids = {
+        doc_id
+        for m in (meetings_held + meetings_upcoming)
+        for doc_id in (m.agenda_document_id, m.packet_document_id, m.minutes_document_id)
+        if doc_id
+    }
+    documents_by_id = (
+        {d.id: d for d in db.query(Document).filter(Document.id.in_(meeting_doc_ids))} if meeting_doc_ids else {}
     )
 
     alerts_by_level = dict(
@@ -75,23 +95,31 @@ def compute_stats(db: Session, period_start: datetime, period_end: datetime) -> 
 
     return {
         "documents_filed": documents_filed,
-        "meetings_held": [_meeting_row(m) for m in meetings_held],
-        "meetings_upcoming": [_meeting_row(m) for m in meetings_upcoming],
+        "meetings_held": [_meeting_row(m, documents_by_id) for m in meetings_held],
+        "meetings_upcoming": [_meeting_row(m, documents_by_id) for m in meetings_upcoming],
         "alerts_raised": alerts_raised,
         "alerts_by_level": {str(level): count for level, count in sorted(alerts_by_level.items(), reverse=True)},
         "review_queue_count": review_queue_count,
         "filing_by_agency": [{"agency": agency, "count": count} for agency, count in filing_by_agency],
         "new_notices": [
-            {"title": d.title or "(untitled)", "url": d.original_url or f"/documents/{d.id}"} for d in new_notices
+            {"title": d.title or "(untitled)", "meta": d.agency, "url": _document_url(d)} for d in new_notices
         ],
     }
 
 
-def _meeting_row(meeting: Meeting) -> dict:
+def _meeting_row(meeting: Meeting, documents_by_id: dict) -> dict:
+    # Prefer whichever of these actually exists, in the order a reader
+    # would want it: the agenda (what will be discussed), else the full
+    # packet, else the minutes (what already happened) -- a meeting can
+    # have any subset of these linked depending on where it is in its
+    # lifecycle.
+    doc_id = meeting.agenda_document_id or meeting.packet_document_id or meeting.minutes_document_id
+    document = documents_by_id.get(doc_id) if doc_id else None
     return {
         "date": meeting.start_time.date().isoformat() if meeting.start_time else None,
         "body": meeting.body,
         "meeting_type": meeting.meeting_type,
+        "url": _document_url(document) if document else None,
     }
 
 

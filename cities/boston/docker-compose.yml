@@ -48,6 +48,7 @@ services:
       PROJECT_NAME: Boston Civic Radar
       HTTP_USER_AGENT: BostonCivicRadar/0.1 (+local civic monitoring)
       OLLAMA_TRIAGE_MODEL: llama3.1:8b
+      DASHBOARD_BASE_URL: http://madhatter.local:18013
     volumes:
       - ./archive:/archive
       - ../../core:/app
@@ -58,12 +59,14 @@ services:
       # /app/tests and inherits core/tests/conftest.py's fixtures.
       - ./tests:/app/tests/city
     ports:
-      # Offset from Ventura's 8010 and Santa Cruz's 8012 (8011 was already
-      # taken by an unrelated container on this shared host).
-      - "8013:8000"
+      # 8013 was already taken by an unrelated container (notediscovery) on
+      # this shared host; 18013 was free.
+      - "18013:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
@@ -76,6 +79,7 @@ services:
       PROJECT_NAME: Boston Civic Radar
       HTTP_USER_AGENT: BostonCivicRadar/0.1 (+local civic monitoring)
       OLLAMA_TRIAGE_MODEL: llama3.1:8b
+      DASHBOARD_BASE_URL: http://madhatter.local:18013
     volumes:
       - ./archive:/archive
       - ../../core:/app
@@ -83,6 +87,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: python -m app.worker
 
 volumes:

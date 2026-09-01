@@ -64,7 +64,8 @@ class TestRenderSummaryEmail:
         # inline style="" attribute, which every mainstream client honors.
         _, _, html_body = render_summary_email(_make_summary())
         assert 'class="masthead"' in html_body
-        assert 'style="margin:1.1rem 0 0.3rem' in html_body
+        assert "border-collapse:collapse" in html_body
+        assert "margin:1.1rem 0 0.3rem" in html_body
         assert "background:#eaeee7" in html_body  # light --paper, inlined on .civic-report
 
     def test_plain_text_body_includes_narrative_and_stats(self):

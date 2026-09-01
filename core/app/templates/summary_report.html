@@ -19,8 +19,11 @@
   .civic-report { background: var(--paper); color: var(--ink); font-family: Charter, "Iowan Old Style", Georgia, serif; padding: 2rem 1.25rem 3rem; }
   .civic-report * { box-sizing: border-box; }
   .civic-report .sheet { max-width: 640px; margin: 0 auto; }
-  .civic-report .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); display: flex; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 0.6rem; }
-  .civic-report .masthead { margin: 1.1rem 0 0.3rem; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .civic-report .eyebrow { width: 100%; border-collapse: collapse; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px solid var(--rule); }
+  .civic-report .eyebrow td { padding: 0 0 0.6rem; border: none; }
+  .civic-report .eyebrow-right { text-align: right; white-space: nowrap; }
+  .civic-report .masthead { width: 100%; border-collapse: collapse; margin: 1.1rem 0 0.3rem; }
+  .civic-report .masthead td { padding: 0; border: none; vertical-align: bottom; }
   .civic-report .masthead h1 { font-family: "Iowan Old Style", Charter, Georgia, serif; font-weight: 700; font-size: 2rem; line-height: 1.05; letter-spacing: -0.01em; margin: 0; }
   .civic-report .masthead h1 em { font-style: normal; color: var(--kelp); }
   .civic-report .issue-tag { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.75rem; color: var(--ink-soft); text-align: right; white-space: nowrap; }
@@ -62,19 +65,37 @@
   .civic-report .colophon { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-size: 0.76rem; color: var(--ink-soft); line-height: 1.6; }
   .civic-report .colophon strong { color: var(--ink); }
   .civic-report a { color: var(--kelp); }
+  .civic-report .item-table { width: 100%; border-collapse: collapse; }
+  .civic-report .item-table td { border: none; padding: 0; }
+  .civic-report .item-row td { padding: 0.7rem 0; border-top: 1px solid var(--rule); vertical-align: top; }
+  .civic-report .item-row:first-child td { border-top: none; padding-top: 0; }
+  .civic-report .item-date { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; color: var(--ink-soft); white-space: nowrap; padding-top: 0.2rem; width: 3.6rem; padding-right: 0.9rem; }
 </style>
+{% macro item_row(date_label, title, meta, url) %}
+<tr class="item-row">
+  <td class="item-date">{{ date_label }}</td>
+  <td class="body-text">
+    <div class="title">{% if url %}<a href="{{ url }}">{{ title }}</a>{% else %}{{ title }}{% endif %}</div>
+    {% if meta %}<div class="meta">{{ meta }}</div>{% endif %}
+  </td>
+</tr>
+{% endmacro %}
 <div class="civic-report">
 <div class="sheet">
 
-  <div class="eyebrow">
-    <span>Civic Radar — {{ project_name }}</span>
-    <span>Vol. 1, No. {{ stats.issue_number }}</span>
-  </div>
+  <table class="eyebrow" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+    <tr>
+      <td class="eyebrow-left">{{ project_name }}</td>
+      <td class="eyebrow-right">Vol. 1, No. {{ stats.issue_number }}</td>
+    </tr>
+  </table>
 
-  <div class="masthead">
-    <h1>{{ "The Daily" if summary.period_type == "daily" else "The Weekly" }} <em>{{ "Brief" if summary.period_type == "daily" else "Record" }}</em></h1>
-    <div class="issue-tag">{{ summary.period_start.date() }} – {{ summary.period_end.date() }}<br>Compiled {{ summary.created_at.strftime("%b %-d, %H:%M UTC") }}</div>
-  </div>
+  <table class="masthead" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+    <tr>
+      <td class="masthead-left"><h1>{{ "The Daily" if summary.period_type == "daily" else "The Weekly" }} <em>{{ "Brief" if summary.period_type == "daily" else "Record" }}</em></h1></td>
+      <td class="issue-tag">{{ summary.period_start.date() }} – {{ summary.period_end.date() }}<br>Compiled {{ summary.created_at.strftime("%b %-d, %H:%M UTC") }}</td>
+    </tr>
+  </table>
   <p class="dek">A ledger of what {{ project_name }} tracked sources filed, met on, and scheduled this {{ "day" if summary.period_type == "daily" else "week" }} — assembled from municipal sources, unedited by hand.</p>
 
   <div class="rule-heavy"></div>
@@ -101,27 +122,33 @@
   <section class="col">
     <div class="section-head"><h2>Meetings Held</h2></div>
     {% if stats.meetings_held %}
-    {% for m in stats.meetings_held %}
-    <div class="item"><div class="date">{{ m.date }}</div><div class="body-text"><div class="title">{{ m.body }}</div>{% if m.meeting_type %}<div class="meta">{{ m.meeting_type }}</div>{% endif %}</div></div>
-    {% endfor %}
+    <table class="item-table" cellpadding="0" cellspacing="0" role="presentation">
+      {% for m in stats.meetings_held %}
+      {{ item_row(m.date, m.body, m.meeting_type, m.url) }}
+      {% endfor %}
+    </table>
     {% else %}<p class="quiet-note">No meetings held this period.</p>{% endif %}
   </section>
 
   <section class="col">
     <div class="section-head"><h2>On the Docket — Next 14 Days</h2></div>
     {% if stats.meetings_upcoming %}
-    {% for m in stats.meetings_upcoming %}
-    <div class="item"><div class="date">{{ m.date }}</div><div class="body-text"><div class="title">{{ m.body }}</div>{% if m.meeting_type %}<div class="meta">{{ m.meeting_type }}</div>{% endif %}</div></div>
-    {% endfor %}
+    <table class="item-table" cellpadding="0" cellspacing="0" role="presentation">
+      {% for m in stats.meetings_upcoming %}
+      {{ item_row(m.date, m.body, m.meeting_type, m.url) }}
+      {% endfor %}
+    </table>
     {% else %}<p class="quiet-note">Nothing scheduled in the next 14 days.</p>{% endif %}
   </section>
 
   <section class="col">
     <div class="section-head"><h2>New Public Notices</h2></div>
     {% if stats.new_notices %}
-    {% for n in stats.new_notices %}
-    <div class="item"><div class="date">Filing</div><div class="body-text"><div class="title"><a href="{{ n.url }}">{{ n.title }}</a></div></div></div>
-    {% endfor %}
+    <table class="item-table" cellpadding="0" cellspacing="0" role="presentation">
+      {% for n in stats.new_notices %}
+      {{ item_row("Filing", n.title, n.meta, n.url) }}
+      {% endfor %}
+    </table>
     {% else %}<p class="quiet-note">No new public notices this period.</p>{% endif %}
   </section>
 
