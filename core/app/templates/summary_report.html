@@ -37,6 +37,7 @@
   .civic-report .overview-box { background: var(--paper-raised); border: 1px solid var(--rule); border-left: 3px solid var(--kelp); padding: 1.1rem 1.3rem; }
   .civic-report .overview-box p { margin: 0 0 0.85rem; font-size: 1rem; line-height: 1.62; }
   .civic-report .overview-box p:last-child { margin-bottom: 0; }
+  .civic-report .figure { font-weight: 700; color: var(--redwood); }
   .civic-report .item { display: flex; gap: 0.9rem; padding: 0.7rem 0; border-top: 1px solid var(--rule); }
   .civic-report .item:first-of-type { border-top: none; padding-top: 0; }
   .civic-report .item .date { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; color: var(--ink-soft); white-space: nowrap; padding-top: 0.2rem; min-width: 3.6rem; }
@@ -91,7 +92,7 @@
     <div class="section-head"><h2>Overview</h2></div>
     <div class="overview-box">
       {% for para in summary.narrative_markdown.split('\n\n') if para.strip() %}
-      <p>{{ para }}</p>
+      <p>{{ para|highlight_figures }}</p>
       {% endfor %}
     </div>
     {% if summary.error_message %}<p class="quiet-note">Note: overview narration had an issue ({{ summary.error_message }}); stats above are still real.</p>{% endif %}

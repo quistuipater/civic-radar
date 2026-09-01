@@ -12,8 +12,10 @@ from markupsafe import escape
 
 from app.config import settings
 from app.models import NarrativeSummary
+from app.summaries.formatting import highlight_figures
 
 _env = jinja2.Environment(loader=jinja2.FileSystemLoader("app/templates"), autoescape=True)
+_env.filters["highlight_figures"] = highlight_figures
 
 _VAR_DECL_RE = re.compile(r"--([\w-]+)\s*:\s*([^;]+);")
 _VAR_USE_RE = re.compile(r"var\(--([\w-]+)\)")

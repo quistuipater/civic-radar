@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import NarrativeSummary
+from app.summaries.formatting import highlight_figures
 
 router = APIRouter(tags=["summaries-dashboard"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["project_name"] = settings.project_name
+templates.env.filters["highlight_figures"] = highlight_figures
 
 SUMMARIES_PAGE_SIZE = 30
 
