@@ -10,8 +10,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       # 5433 was already taken by an unrelated container (memory-postgres)
-      # on this shared host; 25433 was free.
-      - "25433:5432"
+      # on this shared host. 15433 is the actual historical port this
+      # stack has always used (confirmed via /persistent/civic-radar-monitor
+      # /app.py, which still had it hardcoded) -- an earlier fix here
+      # mistakenly picked 25433 instead without checking that dependency,
+      # breaking the monitor. Do not change this without checking
+      # civic-radar-monitor/app.py's per-city port map first.
+      - "15433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-civic_radar}"]
       interval: 5s
