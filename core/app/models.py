@@ -660,3 +660,19 @@ class NarrativeSummary(Base):
     emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppSetting(Base):
+    """Single-row-per-key operator settings that need to be flippable at
+    runtime from the dashboard, unlike everything in app/config.py which is
+    env-var-backed and frozen at process start. Keep this table for
+    genuinely runtime-togglable flags only (e.g. remote_inference_enabled,
+    see app/settings_store.py) -- anything that doesn't change without a
+    deploy belongs in Settings instead.
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

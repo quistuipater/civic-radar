@@ -3,14 +3,15 @@ import logging
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app import dashboard
+from app import dashboard, models
 from app.config import settings
-from app.db import SessionLocal
+from app.db import Base, SessionLocal, engine
 from app.log_handler import DbLogHandler
 from app.organization_tracker import dashboard as organization_tracker_dashboard
 from app.organization_tracker import routers as organization_tracker
 from app.routers import (
     alerts,
+    app_settings,
     building_permits,
     crime_incidents,
     digest,
@@ -29,6 +30,7 @@ from app.summaries import dashboard as summaries_dashboard
 
 app = FastAPI(title=settings.project_name, version="0.1.0")
 
+app.include_router(app_settings.router)
 app.include_router(sources.router)
 app.include_router(documents.router)
 app.include_router(meetings.router)
@@ -57,7 +59,18 @@ def _configure_error_logging() -> None:
     logging.getLogger().addHandler(handler)
 
 
+def _ensure_app_settings_table() -> None:
+    """New tables (like app_settings) aren't picked up by existing deployments
+    until scripts/init_db.py is re-run by hand -- this repo has no migration
+    tool. create_all only adds missing tables/is a no-op on ones that already
+    exist, so it's safe to run unconditionally on every startup rather than
+    rely on every operator remembering the manual step.
+    """
+    Base.metadata.create_all(bind=engine, tables=[models.AppSetting.__table__])
+
+
 app.add_event_handler("startup", _configure_error_logging)
+app.add_event_handler("startup", _ensure_app_settings_table)
 
 
 @app.get("/healthz")

@@ -25,7 +25,7 @@ Santa Cruz Civic Radar is a local-first civic intelligence system that monitors 
 ### Target Deployment
 
 - Runs on `madhatter`, a local Debian server/workstation (Docker Compose, NVIDIA GPU, ~16GB VRAM, ~32GB RAM) — shared with the Ventura Civic Radar deployment on the same host; see README for the port offsets (8012/5433/11435) used to avoid colliding with Ventura's stack.
-- Local-first: core product must not depend on cloud inference. Cloud AI is an optional manual escalation path only, never a default dependency.
+- Local-first: core product must not depend on cloud inference. Ollama is the default; Claude can be made the primary path via the "Remote inference" toggle on the dashboard (off by default), and always falls back to local Ollama on a Claude failure.
 - Dashboard is LAN-only in Phase 1 — no public exposure, minimal auth is acceptable until that changes.
 
 ## Intended Architecture
