@@ -20,32 +20,40 @@ from app.models import Document, NarrativeSummary
 from .conftest import make_ai_output, make_document, make_news_source, make_source
 
 
-class TestIsDue:
+class TestIsSourceDue:
+    """Was named is_due until it collided with the imported
+    app.summaries.generate.is_due (period_type, now=None) -- both bound the
+    same module-global name, so whichever was defined/imported last silently
+    won, and every call to the other's callers broke at runtime despite these
+    tests passing (they called the surviving one, which happened to be this
+    one, under its old shared name). See app/worker.py's is_source_due.
+    """
+
     def test_never_fetched_is_due(self):
         source = worker_module.Source(last_fetched_at=None, polling_interval_minutes=240)
-        assert worker_module.is_due(source, now_utc()) is True
+        assert worker_module.is_source_due(source, now_utc()) is True
 
     def test_not_due_when_interval_has_not_elapsed(self):
         now = now_utc()
         source = worker_module.Source(last_fetched_at=now - timedelta(minutes=10), polling_interval_minutes=240)
-        assert worker_module.is_due(source, now) is False
+        assert worker_module.is_source_due(source, now) is False
 
     def test_due_when_interval_has_elapsed(self):
         now = now_utc()
         source = worker_module.Source(last_fetched_at=now - timedelta(minutes=300), polling_interval_minutes=240)
-        assert worker_module.is_due(source, now) is True
+        assert worker_module.is_source_due(source, now) is True
 
     def test_due_at_the_exact_interval_boundary(self):
         now = now_utc()
         source = worker_module.Source(last_fetched_at=now - timedelta(minutes=240), polling_interval_minutes=240)
-        assert worker_module.is_due(source, now) is True
+        assert worker_module.is_source_due(source, now) is True
 
     def test_defaults_to_240_minutes_when_interval_is_none(self):
         now = now_utc()
         source = worker_module.Source(last_fetched_at=now - timedelta(minutes=241), polling_interval_minutes=None)
-        assert worker_module.is_due(source, now) is True
+        assert worker_module.is_source_due(source, now) is True
         source2 = worker_module.Source(last_fetched_at=now - timedelta(minutes=100), polling_interval_minutes=None)
-        assert worker_module.is_due(source2, now) is False
+        assert worker_module.is_source_due(source2, now) is False
 
 
 class TestRunIngestionTick:

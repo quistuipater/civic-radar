@@ -83,7 +83,7 @@ def _bespoke_ingestors() -> dict:
     }
 
 
-def is_due(source: Source, now: datetime) -> bool:
+def is_source_due(source: Source, now: datetime) -> bool:
     if not source.last_fetched_at:
         return True
     interval = timedelta(minutes=source.polling_interval_minutes or 240)
@@ -96,7 +96,7 @@ def run_ingestion_tick() -> None:
         now = datetime.now(timezone.utc)
         sources = db.query(Source).filter(Source.enabled.is_(True)).all()
         for source in sources:
-            if not is_due(source, now):
+            if not is_source_due(source, now):
                 continue
             try:
                 ingestor = _bespoke_ingestors().get(source.fetch_method, ingest_source)
@@ -171,7 +171,7 @@ def run_news_batch() -> None:
         now = datetime.now(timezone.utc)
         news_sources = db.query(NewsSource).filter(NewsSource.enabled.is_(True)).all()
         for news_source in news_sources:
-            if not is_due(news_source, now):
+            if not is_source_due(news_source, now):
                 continue
             try:
                 poll_news_source(db, news_source)
