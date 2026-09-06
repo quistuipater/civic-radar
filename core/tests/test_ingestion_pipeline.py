@@ -198,6 +198,38 @@ class TestIngestSource:
         assert second_fetch.changed is False
         assert db.query(Document).filter_by(source_id=source.id, document_type="source_page_snapshot").count() == 1
 
+    def test_boston_public_notices_snapshot_ignores_per_request_boilerplate(self, db, archive_root, monkeypatch):
+        # Confirmed live 2026-09-06: boston.gov's Drupal/Incapsula stack
+        # regenerates a CSRF form_build_id (among other things) on every
+        # single request, unrelated to the page's actual notice content.
+        # Before stable_content_hash, that alone caused a brand new
+        # source_page_snapshot Document on every poll. See
+        # boston_public_notices.stable_content_hash's docstring.
+        source = make_source(db, connector="boston_public_notices")
+        page_one = (
+            b'<html><body>'
+            b'<input data-drupal-selector="form-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" '
+            b'name="form_build_id" value="form-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />'
+            b"no real notices changed here"
+            b"</body></html>"
+        )
+        page_two = (
+            b'<html><body>'
+            b'<input data-drupal-selector="form-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" '
+            b'name="form_build_id" value="form-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" />'
+            b"no real notices changed here"
+            b"</body></html>"
+        )
+        responses = iter([page_one, page_two])
+        monkeypatch.setattr(pipeline_module, "fetch_url", lambda url, **k: fake_response(next(responses)))
+
+        first_fetch = ingest_source(db, source)
+        second_fetch = ingest_source(db, source)
+
+        assert first_fetch.changed is True
+        assert second_fetch.changed is False
+        assert db.query(Document).filter_by(source_id=source.id, document_type="source_page_snapshot").count() == 1
+
     def test_a_failed_document_download_is_skipped_not_fatal_to_the_rest_of_the_batch(self, db, archive_root, monkeypatch):
         source = make_source(db, connector="generic")
         page_html = (

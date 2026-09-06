@@ -166,6 +166,53 @@ SOURCES: list[dict] = [
         ),
     ),
     dict(
+        name="City of Boston Public Notices — Licensing Board",
+        jurisdiction="City of Boston",
+        agency="Licensing Board",
+        body="Licensing Board",
+        source_type="notice_board",
+        authority_level="official_primary",
+        url="https://www.boston.gov/public-notices?field_contact_target_id%5B%5D=56",
+        fetch_method="html_pdf_harvest",
+        connector="boston_public_notices",
+        polling_interval_minutes=1440,
+        parser_type="boston_public_notices",
+        notes=(
+            "Reader-flagged gap (Adam Gaffin/Universal Hub, 2026-09-05): the "
+            "Licensing Board holds multiple meetings most weeks and wasn't "
+            "covered at all -- it isn't on Legistar (confirmed live "
+            "2026-09-06 against webapi.legistar.com/v1/boston/Bodies, no "
+            "match), it publishes hearing notices via boston.gov's public-"
+            "notices board instead, same platform/connector as the Elections "
+            "source above, just field_contact_target_id[]=56 (confirmed live "
+            "against that page's own department-filter <select>)."
+        ),
+    ),
+    dict(
+        name="City of Boston Public Notices — Zoning Board of Appeal",
+        jurisdiction="City of Boston",
+        agency="Zoning Board of Appeal",
+        body="Zoning Board of Appeal",
+        source_type="notice_board",
+        authority_level="official_primary",
+        url="https://www.boston.gov/public-notices?field_contact_target_id%5B%5D=21",
+        fetch_method="html_pdf_harvest",
+        connector="boston_public_notices",
+        polling_interval_minutes=1440,
+        parser_type="boston_public_notices",
+        notes=(
+            "Reader-flagged (Adam Gaffin/Universal Hub, 2026-09-05): ZBA "
+            "hearing notices are also published here in human-readable HTML "
+            "form, distinct from the Legistar agenda PDFs the source above "
+            "already ingests -- confirmed live 2026-09-06 that ZBA notices "
+            "are filed under boston.gov's 'Inspectional Services' contact "
+            "facet (field_contact_target_id=21), not a dedicated zoning "
+            "facet (there isn't one). Not a duplicate of the existing "
+            "Legistar ZBA source: same hearings, different publishing "
+            "channel and content shape (prose notice vs. agenda PDF)."
+        ),
+    ),
+    dict(
         name="Boston Inspectional Services Department — Approved Building Permits",
         jurisdiction="City of Boston",
         agency="Inspectional Services Department",

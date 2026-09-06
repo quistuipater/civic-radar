@@ -36,6 +36,13 @@ CONNECTORS = {
     "static_page": static_page.discover,
 }
 
+# Connectors whose source pages need a normalized hash for page-snapshot
+# change detection rather than a plain hash of the raw bytes -- see
+# boston_public_notices.stable_content_hash's docstring for why.
+STABLE_HASH_OVERRIDES = {
+    "boston_public_notices": boston_public_notices.stable_content_hash,
+}
+
 EXT_BY_CONTENT_TYPE = {
     "application/pdf": ".pdf",
     "application/msword": ".doc",
@@ -66,7 +73,15 @@ def ingest_source(db: Session, source: Source) -> Fetch:
         return fetch
 
     body = response.content
-    page_hash = sha256_hex(body)
+    # For sources whose raw page carries per-request-random boilerplate
+    # (CSRF tokens, cache-busting params -- see boston_public_notices.py's
+    # stable_content_hash docstring), hash a normalized version for
+    # change-detection so identical notice content dedupes as identical
+    # instead of spawning a new snapshot Document on every single poll.
+    if source.connector in STABLE_HASH_OVERRIDES:
+        page_hash = STABLE_HASH_OVERRIDES[source.connector](body)
+    else:
+        page_hash = sha256_hex(body)
     directory = archive_dir_for(source.jurisdiction, source.body, now_utc())
 
     fetch.http_status = response.status_code
@@ -152,7 +167,15 @@ def ingest_source(db: Session, source: Source) -> Fetch:
 def _fetch_and_store_document(db: Session, source: Source, fetch: Fetch, item: DiscoveredDocument) -> bool:
     response = fetch_url(item.url)
     content = response.content
-    content_hash = sha256_hex(content)
+    # Same per-request-boilerplate issue as the source-level snapshot above
+    # (see STABLE_HASH_OVERRIDES / boston_public_notices.stable_content_hash)
+    # applies to individual discovered documents too, e.g. boston.gov's own
+    # notice detail pages carry the same rotating CSRF token -- without this,
+    # re-polling an unchanged notice would create a new Document every time.
+    if source.connector in STABLE_HASH_OVERRIDES:
+        content_hash = STABLE_HASH_OVERRIDES[source.connector](content)
+    else:
+        content_hash = sha256_hex(content)
 
     existing = (
         db.query(Document)

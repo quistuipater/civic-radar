@@ -21,11 +21,42 @@ value). No pagination handling: the Elections facet returns a small number
 of live/upcoming notices at any given time, well under one page.
 """
 
+import re
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from app.archive import sha256_hex
 from app.ingestion.connectors.base import DiscoveredDocument
+
+# Every field here is regenerated per-request by boston.gov's Drupal/Incapsula
+# stack and carries no notice content -- confirmed live 2026-09-06 by diffing
+# two page fetches a day apart: the only differences were the CSRF
+# form_build_id, a randomized view wrapper id, the breadcrumb element id, a
+# rotating "suggested search" widget, and Incapsula's cache-busting `cb=`
+# param. Hashing the raw page for change detection against these made the
+# pipeline archive a brand new "page snapshot" Document on effectively every
+# poll, even on days with zero actual notice changes. Strip them before
+# hashing so identical notice content dedupes as identical.
+_VOLATILE_PATTERNS = [
+    re.compile(rb'data-drupal-selector="form-[a-z0-9]+"'),
+    re.compile(rb'name="form_build_id" value="[^"]*"'),
+    re.compile(rb"js-view-dom-id-[a-f0-9]+"),
+    re.compile(rb'id="breadcrumb-[a-f0-9]+"'),
+    re.compile(rb"data-bos-ai-search-window-query=\"[^\"]*\""),
+    re.compile(rb"_Incapsula_Resource\?SWJIYLWA=[^&\"]*&ns=\d+&cb=\d+"),
+]
+
+
+def stable_content_hash(body: bytes) -> str:
+    """Content hash for change-detection purposes only -- strips known
+    per-request-random boilerplate (see _VOLATILE_PATTERNS) so the page's
+    hash only changes when its actual notice content does. The raw body is
+    still archived unmodified; only the hash used for dedup is normalized."""
+    normalized = body
+    for pattern in _VOLATILE_PATTERNS:
+        normalized = pattern.sub(b"", normalized)
+    return sha256_hex(normalized)
 
 
 def discover(html_bytes: bytes, base_url: str, source_body: str | None = None) -> list[DiscoveredDocument]:
