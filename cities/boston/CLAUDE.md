@@ -22,6 +22,11 @@ Boston Civic Radar is a local-first civic intelligence system that monitors offi
 
 **Archive first. Interpret second. Publish third.** Raw source material (HTML, PDFs, metadata) must be durably archived before any parsing, classification, or summarization happens. The AI layer is an analytical assistant, not the system of record — nothing should overwrite or bypass the raw archive.
 
+### AI-layer incidents worth knowing before touching `worker.py` or `ollama_client.py`
+
+- **`is_due` name collision (fixed 2026-09-05).** `worker.py` imported `is_due(period_type, now=None)` from `app/summaries/generate.py` for daily/weekly narrative-summary scheduling, but also defined its own module-level `is_due(source, now)` further down the file for source-polling. The later definition silently shadowed the import, so every `run_summary_batch` tick called the wrong function and raised a caught-and-logged `TypeError` — daily/weekly summaries silently never generated for several days before this was noticed. Fixed by renaming the source-polling one to `is_source_due`. If you add another "is X due" helper, give it a distinct name.
+- **Ollama truncated-JSON repair (fixed 2026-09-05).** `llama3.1:8b`'s `format="json"` mode occasionally stops generating right after closing the final string value without emitting the closing brace(s) it opened, producing an otherwise-complete, correct response that `json.loads` rejects. `ollama_client.generate_json` now auto-repairs this specific pattern (`_close_truncated_json`: closes whatever braces/brackets are still open, but only when generation stopped cleanly outside a string) rather than discarding a good response and falling back to plain stats text.
+
 ### Target Deployment
 
 - Runs on `madhatter`, a local Debian server/workstation (Docker Compose, NVIDIA GPU, ~16GB VRAM, ~32GB RAM).
