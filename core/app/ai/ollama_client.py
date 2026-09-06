@@ -37,11 +37,56 @@ def generate_json(
             )
             resp.raise_for_status()
             raw = resp.json().get("response", "")
-            return json.loads(raw), None
     except httpx.HTTPError as exc:
         return None, f"ollama request failed: {exc}"
+
+    try:
+        return json.loads(raw), None
     except (json.JSONDecodeError, ValueError) as exc:
+        repaired = _close_truncated_json(raw)
+        if repaired is not None:
+            try:
+                return json.loads(repaired), None
+            except (json.JSONDecodeError, ValueError):
+                pass
         return None, f"model returned invalid JSON: {exc}"
+
+
+def _close_truncated_json(raw: str) -> str | None:
+    """llama3.1:8b's format="json" mode occasionally stops generating right
+    after closing the final string value without emitting the closing
+    brace(s)/bracket(s) it opened (confirmed live 2026-09-05: Boston and
+    Santa Cruz's narrative_summary generation intermittently produced a
+    complete, well-formed title/narrative_markdown pair with the trailing
+    "}" simply missing). Rather than discard an otherwise-good response,
+    track brace/bracket nesting -- respecting quoted strings and escapes --
+    and append whatever's still open. Returns None (no repair attempted)
+    if generation stopped mid-string or nothing was left open, since
+    closing a truncated string would corrupt its content rather than
+    complete it, and there's nothing to fix if nothing's unbalanced.
+    """
+    closers: list[str] = []
+    in_string = False
+    escape = False
+    for ch in raw:
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            closers.append("}" if ch == "{" else "]")
+        elif ch in "}]" and closers and closers[-1] == ch:
+            closers.pop()
+
+    if in_string or not closers:
+        return None
+    return raw + "".join(reversed(closers))
 
 
 def generate_vision(model: str, prompt: str, image_b64: str, timeout: float = 120.0) -> tuple[str | None, str | None]:

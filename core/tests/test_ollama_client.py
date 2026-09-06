@@ -98,6 +98,48 @@ class TestGenerateJson:
         assert result is None
         assert "invalid JSON" in error
 
+    def test_repairs_response_missing_a_trailing_closing_brace(self, monkeypatch):
+        # Confirmed live 2026-09-05: llama3.1:8b's format="json" mode
+        # occasionally stops right after closing the final string value
+        # without emitting the object's closing "}".
+        response = FakeResponse(json_data={"response": '{"title": "Recap", "narrative_markdown": "All quiet."'})
+        install_fake_client(monkeypatch, response=response)
+
+        result, error = generate_json("test-model", "some prompt")
+
+        assert result == {"title": "Recap", "narrative_markdown": "All quiet."}
+        assert error is None
+
+    def test_repairs_response_missing_multiple_nested_closers(self, monkeypatch):
+        response = FakeResponse(json_data={"response": '{"items": [{"a": 1}, {"b": 2'})
+        install_fake_client(monkeypatch, response=response)
+
+        result, error = generate_json("test-model", "some prompt")
+
+        assert result == {"items": [{"a": 1}, {"b": 2}]}
+        assert error is None
+
+    def test_does_not_repair_when_generation_stopped_mid_string(self, monkeypatch):
+        # A dropped closing brace is a safe, mechanical fix; a string cut
+        # off mid-sentence is not -- appending a closing quote would
+        # fabricate content the model never actually produced.
+        response = FakeResponse(json_data={"response": '{"title": "Recap", "narrative_markdown": "All quiet and the'})
+        install_fake_client(monkeypatch, response=response)
+
+        result, error = generate_json("test-model", "some prompt")
+
+        assert result is None
+        assert "invalid JSON" in error
+
+    def test_does_not_repair_garbage_with_nothing_unbalanced(self, monkeypatch):
+        response = FakeResponse(json_data={"response": "not valid json at all"})
+        install_fake_client(monkeypatch, response=response)
+
+        result, error = generate_json("test-model", "some prompt")
+
+        assert result is None
+        assert "invalid JSON" in error
+
 
 class TestEmbed:
     def test_returns_embedding_vector_on_success(self, monkeypatch):
