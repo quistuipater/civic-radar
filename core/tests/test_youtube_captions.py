@@ -138,3 +138,105 @@ class TestMatchMeetingYoutube:
         result = _match_meeting(db, source, "MVC Land Use Planning Committee Meeting 6/12/2023")
 
         assert result is None
+
+
+from app.ingestion.youtube_captions import _fetch_auto_captions, _list_channel_videos, ingest_youtube_captions
+
+CHANNEL_ENTRIES = [
+    {"id": "abc123", "title": "Martha's Vineyard Water Alliance Meeting 4/17/25"},
+    {"id": "def456", "title": "GIS How-to Upload Coordinate Spreadsheet to ArcGIS OnLine"},
+    {"id": "ghi789", "title": "MVC Land Use Planning Committee Meeting 6/12/2023"},
+]
+
+FAKE_VTT = """WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.000 --> 00:00:02.000 align:start position:0%
+Good evening everyone.
+
+00:00:02.000 --> 00:00:02.010 align:start position:0%
+Good evening everyone.
+"""
+
+
+class TestIngestYoutubeCaptions:
+    def _install(self, monkeypatch, entries=CHANNEL_ENTRIES, captions_by_id=None):
+        monkeypatch.setattr(youtube_captions_module, "_list_channel_videos", lambda url: entries)
+        captions_by_id = captions_by_id or {e["id"]: FAKE_VTT for e in entries}
+        monkeypatch.setattr(
+            youtube_captions_module, "_fetch_auto_captions", lambda video_id: captions_by_id.get(video_id)
+        )
+
+    def test_skips_non_governance_videos(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+        self._install(monkeypatch)
+
+        created = ingest_youtube_captions(db, source)
+
+        assert created == 2  # Water Alliance + Land Use Planning Committee, not the GIS video
+        titles = {t.title for t in db.query(MeetingTranscript).filter_by(source_id=source.id).all()}
+        assert "GIS How-to Upload Coordinate Spreadsheet to ArcGIS OnLine" not in titles
+
+    def test_rerunning_dedupes_by_original_url(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+        self._install(monkeypatch)
+
+        first = ingest_youtube_captions(db, source)
+        second = ingest_youtube_captions(db, source)
+
+        assert first == 2
+        assert second == 0
+
+    def test_video_with_no_captions_is_skipped_not_fatal(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+        self._install(monkeypatch, captions_by_id={"abc123": None, "ghi789": FAKE_VTT})
+
+        created = ingest_youtube_captions(db, source)
+
+        assert created == 1
+
+    def test_transcript_linked_to_matching_meeting_when_found(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+        meeting = make_meeting(
+            db,
+            jurisdiction="Martha's Vineyard Commission",
+            body="Land Use Planning Committee",
+            start_time=datetime(2023, 6, 12, 18, 0, tzinfo=timezone.utc),
+        )
+        self._install(monkeypatch)
+
+        ingest_youtube_captions(db, source)
+
+        transcript = (
+            db.query(MeetingTranscript)
+            .filter_by(source_id=source.id, title="MVC Land Use Planning Committee Meeting 6/12/2023")
+            .one()
+        )
+        assert transcript.meeting_id == meeting.id
+        assert transcript.model_name == "youtube-auto-caption"
+
+    def test_channel_listing_failure_is_recorded_and_does_not_crash(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions")
+
+        def boom(url):
+            raise RuntimeError("yt-dlp extraction failed")
+
+        monkeypatch.setattr(youtube_captions_module, "_list_channel_videos", boom)
+
+        created = ingest_youtube_captions(db, source)
+
+        assert created == 0
+        assert source.consecutive_failures == 1
+        assert source.last_error is not None
+
+    def test_updates_source_fetch_bookkeeping_on_success(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+        self._install(monkeypatch)
+
+        ingest_youtube_captions(db, source)
+
+        assert source.last_fetched_at is not None
+        assert source.consecutive_failures == 0
+        assert source.last_error is None
+        assert source.last_changed_at is not None
