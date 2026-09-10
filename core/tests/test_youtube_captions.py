@@ -160,10 +160,28 @@ Good evening everyone.
 """
 
 
+def _fake_vtt_for(video_id: str) -> str:
+    """Distinct-per-video VTT text so different videos produce different
+    content_hash values, the way real auto-captions from different videos
+    would -- a single shared FAKE_VTT string across multiple videos would
+    make them collide on content_hash (which is a genuine constraint on
+    MeetingTranscript.content_hash, not just a dedup nicety)."""
+    return f"""WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.000 --> 00:00:02.000 align:start position:0%
+Good evening everyone, this is video {video_id}.
+
+00:00:02.000 --> 00:00:02.010 align:start position:0%
+Good evening everyone, this is video {video_id}.
+"""
+
+
 class TestIngestYoutubeCaptions:
     def _install(self, monkeypatch, entries=CHANNEL_ENTRIES, captions_by_id=None):
         monkeypatch.setattr(youtube_captions_module, "_list_channel_videos", lambda url: entries)
-        captions_by_id = captions_by_id or {e["id"]: FAKE_VTT for e in entries}
+        captions_by_id = captions_by_id or {e["id"]: _fake_vtt_for(e["id"]) for e in entries}
         monkeypatch.setattr(
             youtube_captions_module, "_fetch_auto_captions", lambda video_id: captions_by_id.get(video_id)
         )

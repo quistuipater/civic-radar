@@ -209,16 +209,7 @@ def ingest_youtube_captions(db: Session, source: Source) -> int:
             logger.warning("no auto-captions available for %s (%s)", video["title"], video["id"])
             continue
 
-        # Hashed together with the video id, not the raw caption text alone:
-        # unlike meeting_audio.py's actual audio bytes (which in practice
-        # never collide across distinct episodes), two distinct videos can
-        # legitimately share near-identical short auto-caption text (e.g.
-        # "Good evening everyone." openers) while still being separate
-        # meetings that both deserve their own MeetingTranscript row. Tying
-        # the hash to the video keeps the (source_id, content_hash) unique
-        # constraint from conflating them, while still catching a literal
-        # re-fetch of the same video's captions as a duplicate.
-        content_hash = sha256_hex(f"{video['id']}:{vtt_text}".encode())
+        content_hash = sha256_hex(vtt_text.encode())
         existing_by_hash = (
             db.query(MeetingTranscript)
             .filter(MeetingTranscript.source_id == source.id, MeetingTranscript.content_hash == content_hash)
