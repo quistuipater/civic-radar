@@ -83,3 +83,70 @@ def _parse_vtt(vtt_text: str) -> list[dict]:
         else:
             segments.append({"start": start, "end": end, "text": text, "speaker": None})
     return segments
+
+
+_GOVERNANCE_KEYWORDS = (
+    "meeting",
+    "committee",
+    "task force",
+    "group",
+    "alliance",
+    "commission",
+    "presentation",
+    "forum",
+    "hearing",
+    "training",
+)
+
+
+def _is_governance_meeting_title(title: str) -> bool:
+    lowered = title.lower()
+    return any(keyword in lowered for keyword in _GOVERNANCE_KEYWORDS)
+
+
+# Numeric dates use "/" or "-" as separator (YouTube titles use both, e.g.
+# "4/17/25" and "10-8-25"); month-name dates cover titles like "Manuel
+# Correllus State Task Force - June 10, 2025". Unlike meeting_audio.py's
+# TITLE_DATE_RE, there's no trailing publish-date restatement in these
+# titles to worry about skipping past -- the first match is the real date.
+TITLE_DATE_RE = re.compile(
+    r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|[A-Z][a-z]+\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})"
+)
+
+
+def _parse_meeting_date_from_title(title: str) -> date | None:
+    match = TITLE_DATE_RE.search(title)
+    if not match:
+        return None
+    try:
+        return dateutil_parser.parse(match.group(1)).date()
+    except (ValueError, OverflowError):
+        return None
+
+
+def _extract_body_hint(title: str) -> str:
+    match = TITLE_DATE_RE.search(title)
+    prefix = title[: match.start()] if match else title
+    return prefix.strip(" -").removesuffix("Meeting").strip(" -")
+
+
+def _match_meeting(db: Session, source: Source, title: str) -> Meeting | None:
+    meeting_date = _parse_meeting_date_from_title(title)
+    if meeting_date is None:
+        return None
+    day_start = datetime(meeting_date.year, meeting_date.month, meeting_date.day, tzinfo=timezone.utc)
+    day_end = datetime(meeting_date.year, meeting_date.month, meeting_date.day, 23, 59, 59, tzinfo=timezone.utc)
+    candidates = (
+        db.query(Meeting)
+        .filter(Meeting.jurisdiction == source.jurisdiction, Meeting.start_time.between(day_start, day_end))
+        .all()
+    )
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    body_hint = _extract_body_hint(title).lower()
+    for meeting in candidates:
+        if meeting.body and (meeting.body.lower() in body_hint or body_hint in meeting.body.lower()):
+            return meeting
+    return candidates[0]  # best effort -- multiple same-day meetings, no clean body match
