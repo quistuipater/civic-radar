@@ -13,6 +13,7 @@ from app.ingestion.youtube_captions import (
     _match_meeting,
     _parse_meeting_date_from_title,
     _parse_vtt,
+    ingest_youtube_captions,
 )
 from app.models import MeetingTranscript
 
@@ -140,8 +141,6 @@ class TestMatchMeetingYoutube:
         assert result is None
 
 
-from app.ingestion.youtube_captions import _fetch_auto_captions, _list_channel_videos, ingest_youtube_captions
-
 CHANNEL_ENTRIES = [
     {"id": "abc123", "title": "Martha's Vineyard Water Alliance Meeting 4/17/25"},
     {"id": "def456", "title": "GIS How-to Upload Coordinate Spreadsheet to ArcGIS OnLine"},
@@ -209,6 +208,21 @@ class TestIngestYoutubeCaptions:
     def test_video_with_no_captions_is_skipped_not_fatal(self, db, archive_root, monkeypatch):
         source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
         self._install(monkeypatch, captions_by_id={"abc123": None, "ghi789": FAKE_VTT})
+
+        created = ingest_youtube_captions(db, source)
+
+        assert created == 1
+
+    def test_video_download_error_is_skipped_not_fatal(self, db, archive_root, monkeypatch):
+        source = make_source(db, fetch_method="youtube_channel_captions", jurisdiction="Martha's Vineyard Commission")
+
+        def fetch(video_id):
+            if video_id == "abc123":
+                raise Exception("yt-dlp DownloadError: Private video")
+            return FAKE_VTT
+
+        monkeypatch.setattr(youtube_captions_module, "_list_channel_videos", lambda url: CHANNEL_ENTRIES)
+        monkeypatch.setattr(youtube_captions_module, "_fetch_auto_captions", fetch)
 
         created = ingest_youtube_captions(db, source)
 

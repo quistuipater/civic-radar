@@ -21,7 +21,6 @@ same carve-out meeting_audio.py takes for its audio-enclosure download.
 import logging
 import re
 import tempfile
-from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -204,7 +203,11 @@ def ingest_youtube_captions(db: Session, source: Source) -> int:
         if existing:
             continue
 
-        vtt_text = _fetch_auto_captions(video["id"])
+        try:
+            vtt_text = _fetch_auto_captions(video["id"])
+        except Exception as exc:
+            logger.warning("caption download failed for %s (%s): %s", video["title"], video["id"], exc)
+            continue
         if vtt_text is None:
             logger.warning("no auto-captions available for %s (%s)", video["title"], video["id"])
             continue
