@@ -43,7 +43,12 @@ _VOLATILE_PATTERNS = [
     re.compile(rb'name="form_build_id" value="[^"]*"'),
     re.compile(rb"js-view-dom-id-[a-f0-9]+"),
     re.compile(rb'id="breadcrumb-[a-f0-9]+"'),
-    re.compile(rb"data-bos-ai-search-window-query=\"[^\"]*\""),
+    # The suggested-search widget repeats its rotating query text twice --
+    # once as the data attribute value, once as the <button>'s own inner
+    # text -- so both must be stripped, not just the attribute, or two
+    # fetches that only differ in this widget still hash differently
+    # (caught by test_boston_public_notices.py's regression test).
+    re.compile(rb'<li><button[^>]*data-bos-ai-search-window-query="[^"]*"[^>]*>[^<]*</button></li>'),
     re.compile(rb"_Incapsula_Resource\?SWJIYLWA=[^&\"]*&ns=\d+&cb=\d+"),
 ]
 
