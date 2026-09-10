@@ -38,6 +38,9 @@ Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 - `docs/organization-tracker/` — requirements for the bounded module that
   converts archived evidence into time-aware organizational state and reviewed
   change events; Ventura is the MVP deployment.
+- `docs/litigation-source-ingestion.md` — source strategy and implementation
+  contract for discovering and archiving court opinions and available docket
+  material involving Ventura.
 - `whisperx_service/` — standalone meeting-audio transcription service.
 - `prd.md` — the platform's product requirements document.
 - `EXPANSION_STRATEGY.md` — the planning notes behind the "city is the
