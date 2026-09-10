@@ -109,7 +109,7 @@ SOURCES: list[dict] = [
         name="Massachusetts OCPF — Boston Mayor & City Council Filings",
         jurisdiction="City of Boston",
         agency="Office of Campaign and Political Finance",
-        body=None,
+        body="Boston",
         source_type="campaign_finance_feed",
         authority_level="official_primary",
         url="https://api.ocpf.us/reports/log",
@@ -131,11 +131,14 @@ SOURCES: list[dict] = [
             "level instead. Confirmed live 2026-07-10: real, documented "
             "REST API (Swagger at api.ocpf.us/swagger/v1/swagger.json), "
             "unauthenticated, PDFs at /report/pdf/{reportId}. Scoped via "
-            "app/ingestion/connectors/ocpf.py's BOSTON_CPF_IDS allowlist to "
-            "the Mayor + 13 City Councilors specifically (from "
-            "GET /municipalities' BOSTON entry), not every state "
-            "legislator/Sheriff/DA whose district happens to overlap "
-            "Boston -- see that module's docstring for why."
+            "app/ingestion/connectors/ocpf.py's CPF_ID_ALLOWLISTS['Boston'] "
+            "(keyed by this Source's body field -- set to 'Boston' "
+            "specifically so the connector can tell which city's allowlist "
+            "applies now that a second fork also uses this connector, see "
+            "Martha's Vineyard) to the Mayor + 13 City Councilors "
+            "specifically (from GET /municipalities' BOSTON entry), not "
+            "every state legislator/Sheriff/DA whose district happens to "
+            "overlap Boston -- see that module's docstring for why."
         ),
     ),
     dict(

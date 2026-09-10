@@ -1,13 +1,15 @@
 # Civic Radar — Platform Overview
 
 *This repository **is** the Civic Radar platform: one shared engine (`core/`)
-plus three thin per-jurisdiction instantiations (`cities/ventura/`,
-`cities/santa_cruz/`, `cities/boston/`). It was reorganized in 2026-07 from
-three independent forks (`ventura_civic_radar`, `santa_cruz_civic_radar`,
-`boston_civic_radar`) into this monorepo, with full commit history from all
-three preserved (see "History" below). This document describes the platform
-as a whole; each city's own `cities/<city>/README.md` covers just what's
-actually specific to that deployment.*
+plus four thin per-jurisdiction instantiations (`cities/ventura/`,
+`cities/santa_cruz/`, `cities/boston/`, `cities/marthas_vineyard/`). The
+first three were reorganized in 2026-07 from independent forks
+(`ventura_civic_radar`, `santa_cruz_civic_radar`, `boston_civic_radar`) into
+this monorepo, with full commit history from all three preserved (see
+"History" below); Martha's Vineyard was bootstrapped directly in the
+monorepo on 2026-09-10, so it has no separate import history. This document
+describes the platform as a whole; each city's own `cities/<city>/README.md`
+covers just what's actually specific to that deployment.*
 
 ## Purpose
 
@@ -227,7 +229,7 @@ Each city is a self-contained Docker Compose project rooted at
 `cities/<city>/`, building against `../../core` as its Docker context:
 
 ```bash
-cd cities/santa_cruz   # or ventura, or boston
+cd cities/santa_cruz   # or ventura, boston, or marthas_vineyard
 cp .env.example .env
 docker compose up -d postgres
 docker compose run --rm api python scripts/init_db.py

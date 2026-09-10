@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-marthas_vineyard_civic_radar}
+      POSTGRES_USER: ${POSTGRES_USER:-civic_radar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civic_radar_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Offset from Ventura's 25432, Santa Cruz's 15433, Boston's 5434.
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-civic_radar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      # Offset from Ventura's 11434, Santa Cruz's 11435, Boston's 11436.
+      - "11437:11434"
+    # Uncomment on a host with an NVIDIA GPU + nvidia-container-toolkit (e.g. madhatter):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    build: ../../core
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://civic_radar:civic_radar_dev_password@postgres:5432/marthas_vineyard_civic_radar}
+      PROJECT_NAME: Martha's Vineyard Civic Radar
+      HTTP_USER_AGENT: MarthasVineyardCivicRadar/0.1 (+local civic monitoring)
+      OLLAMA_TRIAGE_MODEL: llama3.1:8b
+      DASHBOARD_BASE_URL: http://madhatter.local:8014
+    volumes:
+      - ./archive:/archive
+      - ../../core:/app
+      # No city_settings.py mount: app/city_config.py's built-in defaults
+      # (empty CRIME_AGENCY_CONFIG/BUILDING_PERMITS_CONFIG/
+      # FOOD_INSPECTIONS_CONFIG) are correct as-is -- this fork hasn't
+      # identified any structured feeds needing one yet. Add a
+      # city_settings.py + this mount (see boston/docker-compose.yml) if
+      # that changes.
+      - ./seed_sources.py:/app/scripts/seed_sources.py
+      # See boston/docker-compose.yml's comment on this mount shape -- a
+      # fresh subdirectory, not individual files, so it nests under
+      # /app/tests and inherits core/tests/conftest.py's fixtures.
+      - ./tests:/app/tests/city
+    ports:
+      - "8014:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ../../core
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://civic_radar:civic_radar_dev_password@postgres:5432/marthas_vineyard_civic_radar}
+      PROJECT_NAME: Martha's Vineyard Civic Radar
+      HTTP_USER_AGENT: MarthasVineyardCivicRadar/0.1 (+local civic monitoring)
+      OLLAMA_TRIAGE_MODEL: llama3.1:8b
+      DASHBOARD_BASE_URL: http://madhatter.local:8014
+    volumes:
+      - ./archive:/archive
+      - ../../core:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: python -m app.worker
+
+volumes:
+  postgres_data:
+  ollama_data:

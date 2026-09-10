@@ -6,14 +6,15 @@ local AI to turn them into tracked, reviewable "issues" with timelines and
 deadlines. Full detail — purpose, design principles, architecture, and how
 to run it — is in [`OVERVIEW.md`](OVERVIEW.md).
 
-This repo is a monorepo: one shared engine (`core/`) plus three
+This repo is a monorepo: one shared engine (`core/`) plus four
 per-jurisdiction instantiations (`cities/ventura/`, `cities/santa_cruz/`,
-`cities/boston/`), each a self-contained Docker Compose project.
+`cities/boston/`, `cities/marthas_vineyard/`), each a self-contained Docker
+Compose project.
 
 ## Quick start
 
 ```bash
-cd cities/santa_cruz   # or ventura, or boston
+cd cities/santa_cruz   # or ventura, boston, or marthas_vineyard
 cp .env.example .env
 docker compose up -d postgres
 docker compose run --rm api python scripts/init_db.py
@@ -23,12 +24,13 @@ docker compose up -d api worker
 ```
 
 Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
-`:8013`.
+`:8013` (externally `:18013` on the shared madhatter host — see
+`cities/boston/docker-compose.yml`), Martha's Vineyard `:8014`.
 
 ## Layout
 
 - `core/` — the engine: schema, pipeline, dashboard, REST API, AI layer,
-  every ingestion connector (generic and bespoke). Shared by all three
+  every ingestion connector (generic and bespoke). Shared by all four
   cities; see `OVERVIEW.md` for the full module map.
 - `cities/<city>/` — that city's seed data, Docker Compose project, `.env`,
   and README/CLAUDE.md. See `cities/<city>/README.md` for what's actually

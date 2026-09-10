@@ -68,10 +68,12 @@ filing officers the way NetFile-based sources have served both prior forks.
   ingestion function needed, since OCPF's `/reports/log` is JSON, not HTML/
   RSS, but still fits the same interface as `netfile_rss.py`). OCPF runs its
   own real, documented REST API (`api.ocpf.us`, Swagger-published),
-  unauthenticated. Scoped via a `BOSTON_CPF_IDS` allowlist to the Mayor + 13
-  City Councilors specifically (from `GET /municipalities`), not every state
-  legislator/Sheriff/DA whose district happens to overlap Boston. Known
-  limitation: `/reports/log` only returns the ~50 most recent filings
+  unauthenticated. Scoped via `CPF_ID_ALLOWLISTS['Boston']` (keyed by
+  Source.body, since Martha's Vineyard Civic Radar also uses this connector
+  now with its own allowlist) to the Mayor + 13 City Councilors specifically
+  (from `GET /municipalities`), not every state legislator/Sheriff/DA whose
+  district happens to overlap Boston. Known limitation: `/reports/log` only
+  returns the ~50 most recent filings
   statewide with no pagination/date-range params, so a Boston filing could
   in principle be missed between polls if outpaced by other MA filings (same
   class of caveat as NetFile's rolling-window feeds elsewhere in this
