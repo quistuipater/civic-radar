@@ -18,7 +18,7 @@ docker compose run --rm api python scripts/seed_prompts.py
 docker compose up -d api worker
 ```
 
-Dashboard: `http://localhost:8014`, API docs at `/docs`.
+Dashboard: `http://localhost:18014`, API docs at `/docs`.
 
 ## What's implemented (Phase 0, as of 2026-09-10)
 

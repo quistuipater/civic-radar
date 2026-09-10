@@ -25,7 +25,7 @@ docker compose up -d api worker
 
 Dashboard: Ventura `http://localhost:8010`, Santa Cruz `:8012`, Boston
 `:8013` (externally `:18013` on the shared madhatter host — see
-`cities/boston/docker-compose.yml`), Martha's Vineyard `:8014`.
+`cities/boston/docker-compose.yml`), Martha's Vineyard `:18014` (also escaped to a higher port -- 8014 was taken by an unrelated civic-radar-monitor service on the shared host).
 
 ## Layout
 

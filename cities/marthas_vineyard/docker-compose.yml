@@ -44,7 +44,7 @@ services:
       PROJECT_NAME: Martha's Vineyard Civic Radar
       HTTP_USER_AGENT: MarthasVineyardCivicRadar/0.1 (+local civic monitoring)
       OLLAMA_TRIAGE_MODEL: llama3.1:8b
-      DASHBOARD_BASE_URL: http://madhatter.local:8014
+      DASHBOARD_BASE_URL: http://madhatter.local:18014
     volumes:
       - ./archive:/archive
       - ../../core:/app
@@ -60,7 +60,7 @@ services:
       # /app/tests and inherits core/tests/conftest.py's fixtures.
       - ./tests:/app/tests/city
     ports:
-      - "8014:8000"
+      - "18014:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,7 +78,7 @@ services:
       PROJECT_NAME: Martha's Vineyard Civic Radar
       HTTP_USER_AGENT: MarthasVineyardCivicRadar/0.1 (+local civic monitoring)
       OLLAMA_TRIAGE_MODEL: llama3.1:8b
-      DASHBOARD_BASE_URL: http://madhatter.local:8014
+      DASHBOARD_BASE_URL: http://madhatter.local:18014
     volumes:
       - ./archive:/archive
       - ../../core:/app

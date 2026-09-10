@@ -17,7 +17,7 @@ Not yet investigated at all (unlike the confirmed gaps above): meeting audio, cr
 Common commands:
 - `docker compose up -d postgres && docker compose run --rm api python scripts/init_db.py` — create schema
 - `docker compose run --rm api python scripts/seed_sources.py && docker compose run --rm api python scripts/seed_prompts.py` — seed source registry (3 real sources) + versioned prompts (both idempotent)
-- `docker compose up -d api worker` — dashboard at `http://localhost:8014` (offset from Ventura's 8010, Santa Cruz's 8012, Boston's external 18013), API docs at `/docs`
+- `docker compose up -d api worker` — dashboard at `http://localhost:18014` (8014 was taken by an unrelated civic-radar-monitor service on the shared host, same class of escape as Boston's 18013), API docs at `/docs`
 - `backend/tests/`: `docker compose run --rm api pytest`. No bespoke connector code exists in this fork yet (both live sources reuse connectors already covered by `core/tests/`), so there's no `cities/marthas_vineyard/tests/*.py` beyond a placeholder README — add tests there if/when this fork gets its own connector (West Tisbury, Dukes County EvoGov). Runs against a real `civic_radar_test` Postgres database (not sqlite — several models need pgvector/JSONB), each test isolated in a rolled-back transaction (see `join_transaction_mode="create_savepoint"` in `tests/conftest.py`).
 
 Follow the existing stack and module layout in `backend/app/` rather than introducing a different framework or reorganizing — it mirrors the PRD's architecture directly (see below). Reconnaissance covered all six MV towns plus Dukes County plus the Martha's Vineyard Commission before writing any seed data — check `seed_sources.py`'s module docstring before assuming a gap here is unresearched; most of them are confirmed, not just missing.
@@ -32,7 +32,7 @@ Martha's Vineyard Civic Radar is a local-first civic intelligence system that mo
 
 ### Target Deployment
 
-- Runs on `madhatter`, a local Debian server/workstation (Docker Compose, NVIDIA GPU, ~16GB VRAM, ~32GB RAM) — shared with the Ventura/Santa Cruz/Boston Civic Radar deployments on the same host; see `docker-compose.yml`'s port comments (5435/11437/8014) for the offsets used to avoid colliding with the other three stacks.
+- Runs on `madhatter`, a local Debian server/workstation (Docker Compose, NVIDIA GPU, ~16GB VRAM, ~32GB RAM) — shared with the Ventura/Santa Cruz/Boston Civic Radar deployments on the same host; see `docker-compose.yml`'s port comments (5435/11437/18014) for the offsets used to avoid colliding with the other three stacks.
 - Local-first: core product must not depend on cloud inference. Ollama is the default; Claude can be made the primary path via the "Remote inference" toggle on the dashboard (off by default), and always falls back to local Ollama on a Claude failure.
 - Dashboard is LAN-only in Phase 1 — no public exposure, minimal auth is acceptable until that changes.
 
