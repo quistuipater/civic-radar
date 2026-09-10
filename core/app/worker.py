@@ -22,6 +22,7 @@ from app.ingestion.meeting_audio import ingest_meeting_audio
 from app.ingestion.onbase_agenda import ingest_onbase_agenda
 from app.ingestion.pipeline import ingest_source
 from app.ingestion.scc_planning_search import ingest_scc_planning_search
+from app.ingestion.youtube_captions import ingest_youtube_captions
 from app.issue_matching import match_document_to_issue
 from app.log_handler import DbLogHandler, prune_app_logs
 from app.models import AiOutput, Document, NewsSource, Source
@@ -80,6 +81,7 @@ def _bespoke_ingestors() -> dict:
         "onbase_agenda_online": ingest_onbase_agenda,
         "scc_planning_search": ingest_scc_planning_search,
         "legistar_api": ingest_legistar,
+        "youtube_channel_captions": ingest_youtube_captions,
     }
 
 

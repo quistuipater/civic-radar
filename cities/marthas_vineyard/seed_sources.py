@@ -127,6 +127,45 @@ SOURCES: list[dict] = [
             "one share the same connector -- see that module's docstring)."
         ),
     ),
+    dict(
+        name="Martha's Vineyard Commission — YouTube Channel Captions",
+        jurisdiction="Martha's Vineyard Commission",
+        agency="Martha's Vineyard Commission",
+        body=None,
+        source_type="meeting_video_captions",
+        authority_level="official_primary",
+        url="https://www.youtube.com/@mvcommission/videos",
+        fetch_method="youtube_channel_captions",
+        connector="generic",  # unused for this fetch_method -- see worker._bespoke_ingestors()
+        polling_interval_minutes=1440,
+        parser_type=None,
+        notes=(
+            "Confirmed live 2026-09-10: 115 videos, real MVC governance "
+            "content present (full Commission meetings 2022-2023, ongoing "
+            "Land Use Planning Committee / Housing Action Task Force / "
+            "Joint Affordable Housing Group / Climate Action Task Force / "
+            "Manuel Correllus State Forest Task Force / Water Alliance "
+            "meetings through 2026) alongside non-governance noise (GIS "
+            "tutorials, drone footage, oral-history interviews) filtered "
+            "out by title keyword in app/ingestion/youtube_captions.py. "
+            "Uses YouTube's free auto-generated captions via yt-dlp -- no "
+            "API key, no WhisperX/GPU needed, confirmed live against a "
+            "real Water Alliance meeting video. This is the closest "
+            "available substitute for the MVC's own site, which is "
+            "Akamai-bot-walled (see this file's module docstring)."
+        ),
+        known_limitations=(
+            "Title-based date/body matching to a Meeting row is best-effort "
+            "(same class of limitation as meeting_audio.py's Granicus "
+            "matching) -- titles that don't parse to a date, or that don't "
+            "match this module's governance-keyword allowlist, are either "
+            "left unlinked or silently skipped. Polled daily "
+            "(polling_interval_minutes=1440) rather than the 240-minute "
+            "default used elsewhere, since this channel uploads "
+            "infrequently and yt-dlp's channel listing is comparatively "
+            "expensive."
+        ),
+    ),
 ]
 
 

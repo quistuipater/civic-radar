@@ -103,6 +103,21 @@ class TestRunIngestionTick:
         assert crime_calls == ["Crime Feed"]
         assert regular_calls == []
 
+    def test_youtube_channel_captions_sources_are_routed_to_ingest_youtube_captions(
+        self, db, db_session_factory, monkeypatch
+    ):
+        monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
+        regular_calls, youtube_calls = [], []
+        monkeypatch.setattr(worker_module, "ingest_source", lambda db, s: regular_calls.append(s.name))
+        monkeypatch.setattr(worker_module, "ingest_youtube_captions", lambda db, s: youtube_calls.append(s.name))
+        make_source(db, name="MVC YouTube", fetch_method="youtube_channel_captions", last_fetched_at=None)
+        db.commit()
+
+        worker_module.run_ingestion_tick()
+
+        assert youtube_calls == ["MVC YouTube"]
+        assert regular_calls == []
+
     def test_one_sources_crash_does_not_stop_the_others(self, db, db_session_factory, monkeypatch):
         monkeypatch.setattr(worker_module, "SessionLocal", db_session_factory)
         calls = []
