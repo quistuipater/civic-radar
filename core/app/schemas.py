@@ -157,6 +157,16 @@ class IssueOut(ORMModel):
     next_deadline: datetime | None
     review_status: str
     publication_status: str
+    # Litigation-specific detail fields -- see Issue model's docstring
+    # comment for why these live directly on Issue rather than a separate
+    # table, and why case_status is distinct from status.
+    case_number: str | None
+    court: str | None
+    opposing_party: str | None
+    city_role: str | None
+    claim_type: str | None
+    case_status: str | None
+    cumulative_amount_authorized: float | None
     created_at: datetime
     updated_at: datetime
 
@@ -183,6 +193,13 @@ class IssueUpdate(BaseModel):
     financial_impact_score: int | None = None
     legal_complexity_score: int | None = None
     next_deadline: datetime | None = None
+    case_number: str | None = None
+    court: str | None = None
+    opposing_party: str | None = None
+    city_role: str | None = None
+    claim_type: str | None = None
+    case_status: str | None = None
+    cumulative_amount_authorized: float | None = None
 
 
 class IssueLinkCreate(BaseModel):

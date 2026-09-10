@@ -14,6 +14,48 @@
 <h2>Summary</h2>
 <p>{{ issue.summary or 'No summary recorded yet.' }}</p>
 
+<h2>Litigation details</h2>
+{% if issue.case_number or issue.court or issue.opposing_party or issue.city_role or issue.claim_type or issue.case_status or issue.cumulative_amount_authorized %}
+<table>
+  <tr><th>Case number</th><td>{{ issue.case_number or '—' }}</td></tr>
+  <tr><th>Court</th><td>{{ issue.court or '—' }}</td></tr>
+  <tr><th>Opposing party</th><td>{{ issue.opposing_party or '—' }}</td></tr>
+  <tr><th>City's role</th><td>{{ issue.city_role or '—' }}</td></tr>
+  <tr><th>Claim type</th><td>{{ issue.claim_type or '—' }}</td></tr>
+  <tr><th>Case status</th><td>{{ issue.case_status or '—' }}</td></tr>
+  <tr><th>Cumulative amount authorized</th><td>{{ '$%.2f'|format(issue.cumulative_amount_authorized) if issue.cumulative_amount_authorized is not none else '—' }}</td></tr>
+</table>
+{% else %}
+<p class="empty">No litigation details recorded. Relevant if this issue tracks a lawsuit the city is a party to -- fill in below.</p>
+{% endif %}
+<details>
+  <summary>Edit litigation details</summary>
+  <form method="post" action="/issues/{{ issue.id }}/litigation">
+    <label>Case number <input type="text" name="case_number" value="{{ issue.case_number or '' }}"></label>
+    <label>Court <input type="text" name="court" value="{{ issue.court or '' }}"></label>
+    <label>Opposing party <input type="text" name="opposing_party" value="{{ issue.opposing_party or '' }}"></label>
+    <label>City's role
+      <select name="city_role">
+        <option value="" {{ 'selected' if not issue.city_role else '' }}>—</option>
+        {% for role in ['plaintiff', 'defendant', 'petitioner', 'respondent', 'appellant', 'appellee'] %}
+        <option value="{{ role }}" {{ 'selected' if issue.city_role == role else '' }}>{{ role }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Claim type <input type="text" name="claim_type" value="{{ issue.claim_type or '' }}"></label>
+    <label>Case status
+      <select name="case_status">
+        <option value="" {{ 'selected' if not issue.case_status else '' }}>—</option>
+        {% for cs in ['active', 'settled', 'dismissed', 'judgment', 'on_appeal'] %}
+        <option value="{{ cs }}" {{ 'selected' if issue.case_status == cs else '' }}>{{ cs }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Cumulative amount authorized ($) <input type="text" name="cumulative_amount_authorized" value="{{ issue.cumulative_amount_authorized or '' }}"></label>
+    <button type="submit">Save</button>
+  </form>
+</details>
+
 <h2>Timeline</h2>
 {% if events %}
 <table>

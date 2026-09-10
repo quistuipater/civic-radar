@@ -45,6 +45,65 @@ Respond with ONLY a JSON object matching this exact shape:
 Scores are 0-10 integers per the scale: 0-2 routine, 3-5 moderate, 6-8 significant, 9-10 major/imminent.
 """
 
+# v2 adds litigation_details on top of v1's classification output, so
+# litigation-tagged documents (e.g. a legal-services-contract amendment for
+# outside counsel on a specific case) surface structured case facts instead
+# of just a "litigation" topic tag with no detail -- see Issue model's
+# case_number/court/opposing_party/city_role/claim_type/case_status/
+# cumulative_amount_authorized fields, which a human reviewer can copy this
+# extraction into via the issue detail page. Kept as a separate constant
+# (not an edit to CLASSIFICATION_PROMPT above) because prompts are versioned
+# by DB row, not mutated in place -- see PROMPT_DEFAULTS below.
+CLASSIFICATION_PROMPT_V2 = """You are a civic-affairs classification assistant for {project_name}.
+Classify the following government document/agenda item. Be conservative: never assert
+corruption, illegality, or bad faith unless the text explicitly says so. Treat anything
+you are not confident about as low confidence and set human_review_required to true.
+
+Allowed topic_categories (choose 1-3): {taxonomy}
+
+Document title: {title}
+Jurisdiction: {jurisdiction}
+Agency/body: {agency}
+Meeting date: {meeting_date}
+
+Text:
+---
+{text}
+---
+
+Respond with ONLY a JSON object matching this exact shape:
+{{
+  "topic_categories": ["..."],
+  "importance_score": 0,
+  "urgency_score": 0,
+  "transparency_risk_score": 0,
+  "public_participation_opportunity": false,
+  "vote_expected": false,
+  "hearing_expected": false,
+  "human_review_required": false,
+  "confidence": "low|medium|high",
+  "rationale": "one or two sentences, grounded only in the text above",
+  "litigation_details": null
+}}
+Scores are 0-10 integers per the scale: 0-2 routine, 3-5 moderate, 6-8 significant, 9-10 major/imminent.
+
+If "litigation" is one of the topic_categories, set litigation_details to an object instead of
+null, with this shape -- use null for any individual fact not explicitly stated in the text above,
+never guess or infer one:
+{{
+  "case_number": "... or null",
+  "court": "... or null",
+  "opposing_party": "... or null",
+  "city_role": "plaintiff|defendant|petitioner|respondent|appellant|appellee, or null",
+  "claim_type": "e.g. employment, contract, tort, land use appeal, civil rights -- or null",
+  "amount_authorized": 0.0,
+  "case_status": "active|settled|dismissed|judgment|on_appeal, or null"
+}}
+amount_authorized is the dollar amount explicitly authorized/discussed in *this* text (e.g. a
+contract-amendment amount for outside counsel), not an inferred running total across other
+filings -- use null if no dollar figure is stated.
+"""
+
 SUMMARY_PROMPT = """You are drafting a plain-English document summary for {project_name},
 a civic-intelligence tool for a columnist/analyst. Distinguish source facts from inference.
 Never invent dates, names, or figures that are not present in the text below.
@@ -266,6 +325,44 @@ PROMPT_DEFAULTS = [
             "rationale": "str",
         },
         active=True,
+    ),
+    dict(
+        prompt_key="agenda_item_classification",
+        prompt_version="v2",
+        task_type="classification",
+        prompt_text=CLASSIFICATION_PROMPT_V2,
+        model_name=None,  # filled from settings at seed time
+        model_params={"temperature": 0.1},
+        json_schema={
+            "topic_categories": "list[str]",
+            "importance_score": "int",
+            "urgency_score": "int",
+            "transparency_risk_score": "int",
+            "public_participation_opportunity": "bool",
+            "vote_expected": "bool",
+            "hearing_expected": "bool",
+            "human_review_required": "bool",
+            "confidence": "str",
+            "rationale": "str",
+            "litigation_details": {
+                "case_number": "str|null",
+                "court": "str|null",
+                "opposing_party": "str|null",
+                "city_role": "str|null",
+                "claim_type": "str|null",
+                "amount_authorized": "float|null",
+                "case_status": "str|null",
+            },
+        },
+        active=True,
+        notes=(
+            "Supersedes v1 by adding litigation_details -- see "
+            "CLASSIFICATION_PROMPT_V2's docstring comment. classify_document() "
+            "always picks the most-recently-created active row for a given "
+            "prompt_key (app/ai/classify.py), so seeding this v2 row is "
+            "enough to switch new classifications over; v1's text is kept "
+            "unchanged for historical ai_outputs rows that cite it."
+        ),
     ),
     dict(
         prompt_key="document_summary",

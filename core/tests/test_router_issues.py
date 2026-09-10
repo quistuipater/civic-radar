@@ -71,6 +71,43 @@ class TestUpdateIssue:
         resp = client.patch("/api/issues/00000000-0000-0000-0000-000000000000", json={"status": "monitoring"})
         assert resp.status_code == 404
 
+    def test_updates_litigation_detail_fields(self, client, db):
+        issue = make_issue(db, title="Gieseke v. City of San Buenaventura")
+        db.commit()
+
+        resp = client.patch(
+            f"/api/issues/{issue.id}",
+            json={
+                "case_number": "24CV01234",
+                "court": "Ventura County Superior Court",
+                "opposing_party": "Gieseke",
+                "city_role": "defendant",
+                "claim_type": "employment",
+                "case_status": "active",
+                "cumulative_amount_authorized": 106000.0,
+            },
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["case_number"] == "24CV01234"
+        assert body["court"] == "Ventura County Superior Court"
+        assert body["opposing_party"] == "Gieseke"
+        assert body["city_role"] == "defendant"
+        assert body["claim_type"] == "employment"
+        assert body["case_status"] == "active"
+        assert body["cumulative_amount_authorized"] == 106000.0
+
+    def test_litigation_detail_fields_default_to_null(self, client, db):
+        issue = make_issue(db, title="Non-litigation issue")
+        db.commit()
+
+        resp = client.get(f"/api/issues/{issue.id}")
+
+        body = resp.json()
+        assert body["case_number"] is None
+        assert body["cumulative_amount_authorized"] is None
+
 
 class TestAttachToIssue:
     def test_attaches_a_document_link(self, client, db):

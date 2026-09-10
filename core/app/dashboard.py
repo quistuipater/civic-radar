@@ -231,6 +231,41 @@ def create_issue_form(
     return RedirectResponse(url="/issues", status_code=303)
 
 
+@router.post("/issues/{issue_id}/litigation")
+def update_issue_litigation_details(
+    issue_id: uuid.UUID,
+    case_number: str = Form(""),
+    court: str = Form(""),
+    opposing_party: str = Form(""),
+    city_role: str = Form(""),
+    claim_type: str = Form(""),
+    case_status: str = Form(""),
+    cumulative_amount_authorized: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    issue = db.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(status_code=404, detail="issue not found")
+    issue.case_number = case_number or None
+    issue.court = court or None
+    issue.opposing_party = opposing_party or None
+    issue.city_role = city_role or None
+    issue.claim_type = claim_type or None
+    issue.case_status = case_status or None
+    # Blank input clears the field; a non-numeric value is left alone (silently
+    # ignored) rather than raising a 400, consistent with this form's plain
+    # HTML-POST-and-redirect pattern having no client-side validation feedback.
+    if cumulative_amount_authorized.strip():
+        try:
+            issue.cumulative_amount_authorized = float(cumulative_amount_authorized)
+        except ValueError:
+            pass
+    else:
+        issue.cumulative_amount_authorized = None
+    db.commit()
+    return RedirectResponse(url=f"/issues/{issue_id}", status_code=303)
+
+
 @router.get("/issues/{issue_id}")
 def issue_detail_page(issue_id: uuid.UUID, request: Request, db: Session = Depends(get_db)):
     issue = db.get(Issue, issue_id)
