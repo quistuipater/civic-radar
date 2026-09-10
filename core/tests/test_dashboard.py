@@ -143,6 +143,62 @@ class TestIssueDetailPage:
         assert "Linked Doc" in resp.text
 
 
+class TestUpdateIssueLitigationDetailsForm:
+    def test_updates_litigation_fields_and_redirects(self, db, client):
+        issue = make_issue(db, title="Gieseke v. City of San Buenaventura")
+        db.commit()
+
+        resp = client.post(
+            f"/issues/{issue.id}/litigation",
+            data={
+                "case_number": "24CV01234",
+                "court": "Ventura County Superior Court",
+                "opposing_party": "Gieseke",
+                "city_role": "defendant",
+                "claim_type": "employment",
+                "case_status": "active",
+                "cumulative_amount_authorized": "106000",
+            },
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        assert resp.headers["location"] == f"/issues/{issue.id}"
+        db.refresh(issue)
+        assert issue.case_number == "24CV01234"
+        assert issue.cumulative_amount_authorized == 106000
+
+    def test_blank_fields_clear_existing_values(self, db, client):
+        issue = make_issue(db, title="Settled Case")
+        issue.case_number = "24CV01234"
+        issue.cumulative_amount_authorized = 106000
+        db.commit()
+
+        client.post(f"/issues/{issue.id}/litigation", data={}, follow_redirects=False)
+
+        db.refresh(issue)
+        assert issue.case_number is None
+        assert issue.cumulative_amount_authorized is None
+
+    def test_non_numeric_amount_is_ignored_not_a_500(self, db, client):
+        issue = make_issue(db, title="Bad Input Case")
+        db.commit()
+
+        resp = client.post(
+            f"/issues/{issue.id}/litigation",
+            data={"cumulative_amount_authorized": "not-a-number"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 303
+        db.refresh(issue)
+        assert issue.cumulative_amount_authorized is None
+
+    def test_returns_404_for_unknown_issue(self, client):
+        resp = client.post("/issues/00000000-0000-0000-0000-000000000000/litigation", data={})
+        assert resp.status_code == 404
+
+
 class TestIssueBriefRedirect:
     def test_redirects_to_the_api_endpoint(self, db, client):
         issue = make_issue(db)

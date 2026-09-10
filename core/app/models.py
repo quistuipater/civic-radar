@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     Text,
     UniqueConstraint,
     func,
@@ -283,6 +284,30 @@ class Issue(Base):
     source_confidence: Mapped[str | None] = mapped_column(Text)
     review_status: Mapped[str] = mapped_column(Text, default="unreviewed")
     publication_status: Mapped[str] = mapped_column(Text, default="internal")
+    # Litigation-specific detail fields -- only meaningful when "litigation" is
+    # one of topic_categories, same as e.g. Document.apn only being meaningful
+    # for land-use documents. Populated by a human during review (see
+    # dashboard.py's /issues/{id}/litigation route) or copied over from an
+    # AI classification's litigation_details extraction (ai_outputs.output_json
+    # for task_type="classification" -- see prompts.py's CLASSIFICATION_PROMPT_V2)
+    # -- there's no auto-populate pipeline from AI output straight onto Issue,
+    # consistent with Issues already being created manually, not auto-generated.
+    case_number: Mapped[str | None] = mapped_column(Text)
+    court: Mapped[str | None] = mapped_column(Text)
+    opposing_party: Mapped[str | None] = mapped_column(Text)
+    # "plaintiff" | "defendant" | "petitioner" | "respondent" | "appellant" | "appellee"
+    city_role: Mapped[str | None] = mapped_column(Text)
+    claim_type: Mapped[str | None] = mapped_column(Text)
+    # "active" | "settled" | "dismissed" | "judgment" | "on_appeal" -- deliberately
+    # separate from Issue.status (new/monitoring/resolved/etc.), which tracks this
+    # project's own review workflow, not the case's real-world legal status.
+    case_status: Mapped[str | None] = mapped_column(Text)
+    # Cumulative amount authorized for outside counsel / settlement on this
+    # matter, in dollars -- deliberately cumulative (not per-filing), since a
+    # single case usually spans multiple contract-amendment agenda items over
+    # time (e.g. the Gieseke v. City of San Buenaventura item that motivated
+    # this field: a $46,000 amendment on top of an existing $106,000 total).
+    cumulative_amount_authorized: Mapped[float | None] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
