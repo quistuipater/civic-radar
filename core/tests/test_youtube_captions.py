@@ -67,6 +67,21 @@ class TestParseVtt:
         assert "<c>" not in segments[0]["text"]
         assert "00:00:04.160" not in segments[0]["text"]
 
+    def test_decodes_html_entities(self):
+        # Real YouTube auto-captions use HTML entities for speaker-change
+        # markers (">>" encoded as "&gt;&gt;") -- confirmed live 2026-09-10
+        # against a real Water Alliance meeting caption after deploying this
+        # module against the actual channel.
+        vtt = (
+            "WEBVTT\n"
+            "\n"
+            "00:00:00.000 --> 00:00:02.000 align:start position:0%\n"
+            "&gt;&gt; They said &amp; agreed.\n"
+        )
+        segments = _parse_vtt(vtt)
+
+        assert segments[0]["text"] == ">> They said & agreed."
+
 
 class TestIsGovernanceMeetingTitle:
     def test_water_alliance_meeting_is_governance(self):

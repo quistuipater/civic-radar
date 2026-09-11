@@ -18,6 +18,7 @@ internally and doesn't fit that helper's (url) -> httpx.Response signature,
 same carve-out meeting_audio.py takes for its audio-enclosure download.
 """
 
+import html
 import logging
 import re
 import tempfile
@@ -66,7 +67,7 @@ def _parse_vtt(vtt_text: str) -> list[dict]:
         text_lines = lines[1:]
         if not text_lines:
             continue
-        last_line = _TIMING_TAG_RE.sub("", text_lines[-1]).strip()
+        last_line = html.unescape(_TIMING_TAG_RE.sub("", text_lines[-1])).strip()
         if not last_line:
             continue
         start = _vtt_timestamp_to_seconds(time_match.group(1))

@@ -163,7 +163,15 @@ SOURCES: list[dict] = [
             "(polling_interval_minutes=1440) rather than the 240-minute "
             "default used elsewhere, since this channel uploads "
             "infrequently and yt-dlp's channel listing is comparatively "
-            "expensive."
+            "expensive. Also confirmed live 2026-09-10 post-deploy: yt-dlp "
+            "must be kept current -- the version pinned at initial "
+            "implementation time (2025.7.21) was already rejected outright "
+            "by YouTube ('content not available on this app', every single "
+            "video) within weeks, requiring a bump to 2026.8.19 before any "
+            "captions could be fetched at all. This is expected, ongoing "
+            "maintenance for this source specifically (YouTube's anti-bot "
+            "checks change faster than most dependencies), not a one-time "
+            "fix -- see core/requirements.txt's yt-dlp pin."
         ),
     ),
 ]

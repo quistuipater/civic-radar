@@ -19,4 +19,4 @@ markdown-it-py==3.0.0
 premailer==3.10.0
 pytest==8.3.3
 pytest-cov==5.0.0
-yt-dlp==2025.7.21
+yt-dlp==2026.8.19
